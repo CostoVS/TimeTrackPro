@@ -11,7 +11,7 @@ const { Pool } = pg;
 
 async function startServer() {
   const app = express();
-  const PORT = process.env.PORT || 3000;
+  const PORT = Number(process.env.PORT) || 3000;
 
   app.use(cors());
   app.use(express.json());
@@ -24,6 +24,68 @@ async function startServer() {
   // Database setup
   let db: any;
   const isPostgres = !!process.env.DATABASE_URL;
+
+  async function initializeDatabase(database: any, postgres: boolean) {
+    if (postgres) {
+      await database.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id SERIAL PRIMARY KEY,
+          date TEXT NOT NULL,
+          clock_in TEXT,
+          tea_out TEXT,
+          tea_in TEXT,
+          lunch_out TEXT,
+          lunch_in TEXT,
+          clock_out TEXT,
+          total_hours REAL DEFAULT 0,
+          status TEXT DEFAULT 'idle',
+          leave_type TEXT,
+          is_paid BOOLEAN DEFAULT TRUE,
+          leave_hours REAL DEFAULT 0,
+          notes TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
+      `);
+    } else {
+      await database.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+          clock_in TEXT,
+          tea_out TEXT,
+          tea_in TEXT,
+          lunch_out TEXT,
+          lunch_in TEXT,
+          clock_out TEXT,
+          total_hours REAL DEFAULT 0,
+          status TEXT DEFAULT 'idle',
+          leave_type TEXT,
+          is_paid INTEGER DEFAULT 1,
+          leave_hours REAL DEFAULT 0,
+          notes TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
+      `);
+
+      // SQLite Migration: Add missing columns if table already existed
+      const columns = await database.all("PRAGMA table_info(sessions)");
+      const columnNames = columns.map((c: any) => c.name);
+      
+      const migrations = [
+        { name: 'leave_type', type: 'TEXT' },
+        { name: 'is_paid', type: 'INTEGER DEFAULT 1' },
+        { name: 'leave_hours', type: 'REAL DEFAULT 0' },
+        { name: 'notes', type: 'TEXT' }
+      ];
+
+      for (const m of migrations) {
+        if (!columnNames.includes(m.name)) {
+          console.log(`Migrating SQLite: Adding column ${m.name}`);
+          await database.exec(`ALTER TABLE sessions ADD COLUMN ${m.name} ${m.type}`);
+        }
+      }
+    }
+  }
 
   try {
     if (isPostgres) {
@@ -49,40 +111,7 @@ async function startServer() {
       });
     }
 
-    // Initialize tables
-    if (isPostgres) {
-      await db.exec(`
-        CREATE TABLE IF NOT EXISTS sessions (
-          id SERIAL PRIMARY KEY,
-          date TEXT NOT NULL,
-          clock_in TEXT,
-          tea_out TEXT,
-          tea_in TEXT,
-          lunch_out TEXT,
-          lunch_in TEXT,
-          clock_out TEXT,
-          total_hours REAL DEFAULT 0,
-          status TEXT DEFAULT 'idle'
-        );
-        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
-      `);
-    } else {
-      await db.exec(`
-        CREATE TABLE IF NOT EXISTS sessions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          date TEXT NOT NULL,
-          clock_in TEXT,
-          tea_out TEXT,
-          tea_in TEXT,
-          lunch_out TEXT,
-          lunch_in TEXT,
-          clock_out TEXT,
-          total_hours REAL DEFAULT 0,
-          status TEXT DEFAULT 'idle'
-        );
-        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
-      `);
-    }
+    await initializeDatabase(db, isPostgres);
     console.log('Database tables initialized');
   } catch (err) {
     console.error('Database initialization failed:', err);
@@ -93,26 +122,34 @@ async function startServer() {
         filename: './database.sqlite',
         driver: sqlite3.Database
       });
-      await db.exec(`
-        CREATE TABLE IF NOT EXISTS sessions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          date TEXT NOT NULL,
-          clock_in TEXT,
-          tea_out TEXT,
-          tea_in TEXT,
-          lunch_out TEXT,
-          lunch_in TEXT,
-          clock_out TEXT,
-          total_hours REAL DEFAULT 0,
-          status TEXT DEFAULT 'idle'
-        );
-        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
-      `);
+      await initializeDatabase(db, false);
+      console.log('Fallback SQLite tables initialized');
     }
   }
 
   // API Routes
   const router = express.Router();
+
+  // Authentication middleware
+  const authenticate = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+    if (authHeader === 'Bearer secret-token-nic-2026') {
+      next();
+    } else {
+      res.status(401).json({ error: 'Unauthorized' });
+    }
+  };
+
+  app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    if (username === 'admin' && password === 'Nic6604211989!') {
+      res.json({ token: 'secret-token-nic-2026' });
+    } else {
+      res.status(401).json({ error: 'Invalid credentials' });
+    }
+  });
+
+  router.use(authenticate);
 
   router.get('/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
@@ -125,7 +162,7 @@ async function startServer() {
 
   router.get('/sessions/current', async (req, res) => {
     const today = new Date().toISOString().split('T')[0];
-    const session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
+    const session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
     res.json(session || null);
   });
 
@@ -134,7 +171,7 @@ async function startServer() {
     const today = new Date().toISOString().split('T')[0];
     const ts = timestamp || new Date().toISOString();
 
-    let session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
+    let session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
 
     if (action === 'clock_in') {
       if (session) {
@@ -150,22 +187,22 @@ async function startServer() {
       }
     }
 
-    const currentSession = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
+    const currentSession = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
     if (currentSession) {
       const total = calculateHours(currentSession);
       await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, currentSession.id]);
     }
 
-    const updated = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
+    const updated = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
     res.json(updated || { status: 'idle' });
   });
 
   router.post('/sessions', async (req, res) => {
-    const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status } = req.body;
+    const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes } = req.body;
     const result = await db.run(
-      `INSERT INTO sessions (date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status || 'done']
+      `INSERT INTO sessions (date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status || 'done', leave_type, is_paid ? 1 : 0, leave_hours || 0, notes]
     );
     const id = isPostgres ? result.rows[0].id : result.lastID;
     const session = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
@@ -176,13 +213,14 @@ async function startServer() {
 
   router.put('/sessions/:id', async (req, res) => {
     const { id } = req.params;
-    const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status } = req.body;
+    const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes } = req.body;
     await db.run(
       `UPDATE sessions SET 
         date = ?, clock_in = ?, tea_out = ?, tea_in = ?, 
-        lunch_out = ?, lunch_in = ?, clock_out = ?, status = ?
+        lunch_out = ?, lunch_in = ?, clock_out = ?, status = ?,
+        leave_type = ?, is_paid = ?, leave_hours = ?, notes = ?
       WHERE id = ?`,
-      [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, id]
+      [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid ? 1 : 0, leave_hours || 0, notes, id]
     );
     const updatedSession = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
     const total = calculateHours(updatedSession);
@@ -222,6 +260,7 @@ async function startServer() {
   }
 
   function calculateHours(s: any) {
+    if (s.leave_type) return s.leave_hours || 0;
     if (!s.clock_in || !s.clock_out) return 0;
     const start = new Date(s.clock_in).getTime();
     const end = new Date(s.clock_out).getTime();

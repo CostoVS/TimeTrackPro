@@ -127,24 +127,31 @@ async function startServer() {
     }
   }
 
-  app.post('/api/login', (req, res) => {
+  // API Routes
+  const router = express.Router();
+
+  router.post('/login', (req, res) => {
     const { username, password } = req.body;
-    console.log(`[LOGIN] Attempt for username: "${username}"`);
+    console.log(`[LOGIN] Attempt - Username: "${username}", Password: "${password}"`);
     
-    const normalizedUsername = username?.toLowerCase().trim();
-    const normalizedPassword = password?.trim();
+    if (!username || !password) {
+      console.log('[LOGIN] Failed: Missing username or password');
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const normalizedUsername = username.toLowerCase().trim();
+    const normalizedPassword = password.trim();
+
+    console.log(`[LOGIN] Normalized - Username: "${normalizedUsername}", Password: "${normalizedPassword}"`);
 
     if (normalizedUsername === 'admin' && normalizedPassword === 'Nic6604211989!') {
       console.log('[LOGIN] Success');
       res.json({ token: 'secret-token-nic-2026' });
     } else {
-      console.log(`[LOGIN] Failed. Received: "${normalizedUsername}" / "${normalizedPassword}"`);
+      console.log('[LOGIN] Failed: Invalid credentials');
       res.status(401).json({ error: 'Invalid credentials' });
     }
   });
-
-  // API Routes
-  const router = express.Router();
 
   // Authentication middleware
   const authenticate = (req: express.Request, res: express.Response, next: express.NextFunction) => {
@@ -152,6 +159,7 @@ async function startServer() {
     if (authHeader === 'Bearer secret-token-nic-2026') {
       next();
     } else {
+      console.log(`[AUTH] Unauthorized access attempt to ${req.path}`);
       res.status(401).json({ error: 'Unauthorized' });
     }
   };

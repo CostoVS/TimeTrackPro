@@ -821,6 +821,17 @@ function Login({ onLogin }: { onLogin: () => void }) {
               >
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
+              
+              <div className="flex justify-center">
+                <Button 
+                  type="button" 
+                  variant="link" 
+                  onClick={() => { setUsername('admin'); setPassword('Nic6604211989!'); }}
+                  className="text-[10px] text-zinc-400 hover:text-zinc-600 uppercase tracking-widest"
+                >
+                  Click here to auto-fill credentials
+                </Button>
+              </div>
             </form>
           </CardContent>
           <div className="p-4 bg-zinc-50 border-t text-center">

@@ -130,6 +130,18 @@ async function startServer() {
   // API Routes
   const router = express.Router();
 
+  router.post('/login', (req, res) => {
+    const { username, password } = req.body;
+    console.log(`Login attempt for username: ${username}`);
+    if (username === 'admin' && password === 'Nic6604211989!') {
+      console.log('Login successful');
+      res.json({ token: 'secret-token-nic-2026' });
+    } else {
+      console.log('Login failed: Invalid credentials');
+      res.status(401).json({ error: 'Invalid credentials' });
+    }
+  });
+
   // Authentication middleware
   const authenticate = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const authHeader = req.headers.authorization;
@@ -139,15 +151,6 @@ async function startServer() {
       res.status(401).json({ error: 'Unauthorized' });
     }
   };
-
-  app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
-    if (username === 'admin' && password === 'Nic6604211989!') {
-      res.json({ token: 'secret-token-nic-2026' });
-    } else {
-      res.status(401).json({ error: 'Invalid credentials' });
-    }
-  });
 
   router.use(authenticate);
 

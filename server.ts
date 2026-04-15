@@ -1,0 +1,230 @@
+import express from 'express';
+import cors from 'cors';
+import sqlite3 from 'sqlite3';
+import { open, Database as SQLiteDatabase } from 'sqlite';
+import pg from 'pg';
+import path from 'path';
+import { createServer as createViteServer } from 'vite';
+import { stringify } from 'csv-stringify/sync';
+
+const { Pool } = pg;
+
+async function startServer() {
+  const app = express();
+  const PORT = 3000;
+
+  app.use(cors());
+  app.use(express.json());
+
+  // Health check
+  app.get('/api/health', (req, res) => {
+    res.json({ status: 'ok', time: new Date().toISOString() });
+  });
+
+  // Database setup
+  let db: any;
+  const isPostgres = !!process.env.DATABASE_URL;
+
+  try {
+    if (isPostgres) {
+      console.log('Attempting to connect to Postgres...');
+      const pool = new Pool({ 
+        connectionString: process.env.DATABASE_URL,
+        connectionTimeoutMillis: 5000 
+      });
+      db = {
+        exec: async (sql: string) => await pool.query(sql),
+        all: async (sql: string, params: any[] = []) => (await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params)).rows,
+        get: async (sql: string, params: any[] = []) => (await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params)).rows[0],
+        run: async (sql: string, params: any[] = []) => await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params),
+      };
+      // Test connection
+      await pool.query('SELECT 1');
+      console.log('Postgres connected successfully');
+    } else {
+      console.log('Using SQLite database');
+      db = await open({
+        filename: './database.sqlite',
+        driver: sqlite3.Database
+      });
+    }
+
+    // Initialize tables
+    if (isPostgres) {
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id SERIAL PRIMARY KEY,
+          date TEXT NOT NULL,
+          clock_in TEXT,
+          tea_out TEXT,
+          tea_in TEXT,
+          lunch_out TEXT,
+          lunch_in TEXT,
+          clock_out TEXT,
+          total_hours REAL DEFAULT 0,
+          status TEXT DEFAULT 'idle'
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
+      `);
+    } else {
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+          clock_in TEXT,
+          tea_out TEXT,
+          tea_in TEXT,
+          lunch_out TEXT,
+          lunch_in TEXT,
+          clock_out TEXT,
+          total_hours REAL DEFAULT 0,
+          status TEXT DEFAULT 'idle'
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
+      `);
+    }
+    console.log('Database tables initialized');
+  } catch (err) {
+    console.error('Database initialization failed:', err);
+    // Fallback to SQLite if Postgres fails to prevent boot hang
+    if (isPostgres) {
+      console.log('Falling back to SQLite due to Postgres error');
+      db = await open({
+        filename: './database.sqlite',
+        driver: sqlite3.Database
+      });
+      await db.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+          clock_in TEXT,
+          tea_out TEXT,
+          tea_in TEXT,
+          lunch_out TEXT,
+          lunch_in TEXT,
+          clock_out TEXT,
+          total_hours REAL DEFAULT 0,
+          status TEXT DEFAULT 'idle'
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
+      `);
+    }
+  }
+
+  // API Routes
+  app.get('/api/sessions', async (req, res) => {
+    const sessions = await db.all('SELECT * FROM sessions ORDER BY date DESC, id DESC');
+    res.json(sessions);
+  });
+
+  app.get('/api/sessions/current', async (req, res) => {
+    const today = new Date().toISOString().split('T')[0];
+    const session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
+    res.json(session || null);
+  });
+
+  app.post('/api/sessions/action', async (req, res) => {
+    const { action, timestamp } = req.body;
+    const today = new Date().toISOString().split('T')[0];
+    const ts = timestamp || new Date().toISOString();
+
+    let session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
+
+    if (action === 'clock_in') {
+      if (session) return res.status(400).json({ error: 'Already clocked in' });
+      await db.run('INSERT INTO sessions (date, clock_in, status) VALUES (?, ?, ?)', [today, ts, 'working']);
+    } else if (session) {
+      const updates: Record<string, string> = {
+        'tea_out': 'on_tea',
+        'tea_in': 'working',
+        'lunch_out': 'on_lunch',
+        'lunch_in': 'working',
+        'clock_out': 'done'
+      };
+
+      if (updates[action]) {
+        await db.run(`UPDATE sessions SET ${action} = ?, status = ? WHERE id = ?`, [ts, updates[action], session.id]);
+        
+        // Recalculate total hours if clocking out
+        if (action === 'clock_out') {
+          const updatedSession = await db.get('SELECT * FROM sessions WHERE id = ?', [session.id]);
+          const total = calculateHours(updatedSession);
+          await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, session.id]);
+        }
+      }
+    }
+
+    const updated = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
+    res.json(updated || { status: 'idle' });
+  });
+
+  app.put('/api/sessions/:id', async (req, res) => {
+    const { id } = req.params;
+    const { clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out } = req.body;
+    
+    await db.run(
+      `UPDATE sessions SET 
+        clock_in = ?, tea_out = ?, tea_in = ?, 
+        lunch_out = ?, lunch_in = ?, clock_out = ?
+      WHERE id = ?`,
+      [clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, id]
+    );
+
+    const updatedSession = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
+    const total = calculateHours(updatedSession);
+    await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, id]);
+
+    res.json({ success: true });
+  });
+
+  app.delete('/api/sessions/:id', async (req, res) => {
+    await db.run('DELETE FROM sessions WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
+  });
+
+  app.get('/api/export', async (req, res) => {
+    const sessions = await db.all('SELECT * FROM sessions ORDER BY date DESC');
+    const csv = stringify(sessions, { header: true });
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', 'attachment; filename=timesheet.csv');
+    res.send(csv);
+  });
+
+  function calculateHours(s: any) {
+    if (!s.clock_in || !s.clock_out) return 0;
+    const start = new Date(s.clock_in).getTime();
+    const end = new Date(s.clock_out).getTime();
+    let duration = end - start;
+
+    // Deduct lunch
+    if (s.lunch_out && s.lunch_in) {
+      const lStart = new Date(s.lunch_out).getTime();
+      const lEnd = new Date(s.lunch_in).getTime();
+      duration -= (lEnd - lStart);
+    }
+
+    // Tea breaks are NOT deducted as per user request
+    return Math.max(0, duration / (1000 * 60 * 60)); // Convert to hours
+  }
+
+  // Vite middleware for development
+  if (process.env.NODE_ENV !== 'production') {
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: 'spa',
+    });
+    app.use(vite.middlewares);
+  } else {
+    const distPath = path.join(process.cwd(), 'dist');
+    app.use(express.static(distPath));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+  }
+
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
+}
+
+startServer();

@@ -130,8 +130,13 @@ async function startServer() {
   // API Routes
   const router = express.Router();
 
+  router.get('/login-test', (req, res) => {
+    res.json({ message: 'Login endpoint is reachable' });
+  });
+
   router.post('/login', (req, res) => {
     const { username, password } = req.body;
+    console.log(`[LOGIN] Request Body: ${JSON.stringify(req.body)}`);
     console.log(`[LOGIN] Attempt - Username: "${username}", Password: "${password}"`);
     
     if (!username || !password) {

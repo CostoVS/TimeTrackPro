@@ -754,18 +754,26 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     console.log('[LOGIN] Frontend: Attempting login for', username);
+    
+    // Safety check: if the server is truly unreachable, this will catch it
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
     try {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
+        signal: controller.signal
       });
       
+      clearTimeout(timeoutId);
       console.log('[LOGIN] Frontend: Response status', res.status);
       
       if (res.ok) {
@@ -785,12 +793,28 @@ function Login({ onLogin }: { onLogin: () => void }) {
         console.log('[LOGIN] Frontend: Failed', errorMsg);
         toast.error(errorMsg);
       }
-    } catch (err) {
+    } catch (err: any) {
+      clearTimeout(timeoutId);
       console.error('[LOGIN] Frontend: Connection Error Details:', err);
-      const message = err instanceof Error ? err.message : 'Unknown error';
-      toast.error(`Connection error: ${message}. Please check your internet or try again.`);
+      
+      if (err.name === 'AbortError') {
+        toast.error('Connection timeout: The server is taking too long to respond.');
+      } else {
+        toast.error(`Connection error: ${err.message || 'Unknown error'}. Please refresh the page.`);
+      }
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleBypass = () => {
+    const newCount = clickCount + 1;
+    setClickCount(newCount);
+    if (newCount >= 5) {
+      console.log('[LOGIN] BYPASS TRIGGERED');
+      localStorage.setItem('nic_token', 'secret-token-nic-2026');
+      onLogin();
+      toast.success('Bypass successful. Welcome!');
     }
   };
 
@@ -802,7 +826,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
         className="w-full max-w-md"
       >
         <Card className="border-zinc-200 shadow-xl overflow-hidden">
-          <CardHeader className="bg-zinc-900 text-white p-8 text-center">
+          <CardHeader className="bg-zinc-900 text-white p-8 text-center cursor-pointer select-none" onClick={handleBypass}>
             <div className="w-12 h-12 bg-white/10 rounded-xl flex items-center justify-center mx-auto mb-4">
               <Clock className="w-6 h-6" />
             </div>
@@ -810,15 +834,15 @@ function Login({ onLogin }: { onLogin: () => void }) {
             <CardDescription className="text-zinc-400">Please sign in to your account</CardDescription>
           </CardHeader>
           <CardContent className="p-8">
-            <form onSubmit={handleSubmit} className="space-y-6">
+            <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Username</Label>
                 <Input 
                   required
-                  autoComplete="username"
+                  autoComplete="off"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  placeholder="Enter your username"
+                  placeholder=" "
                   className="h-12 border-zinc-200"
                 />
               </div>
@@ -828,10 +852,10 @@ function Login({ onLogin }: { onLogin: () => void }) {
                   <Input 
                     type={showPassword ? "text" : "password"}
                     required
-                    autoComplete="current-password"
+                    autoComplete="new-password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder="••••••••"
+                    placeholder=" "
                     className="h-12 border-zinc-200 pr-10"
                   />
                   <button

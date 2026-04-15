@@ -131,43 +131,71 @@ async function startServer() {
     let session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
 
     if (action === 'clock_in') {
-      if (session) return res.status(400).json({ error: 'Already clocked in' });
-      await db.run('INSERT INTO sessions (date, clock_in, status) VALUES (?, ?, ?)', [today, ts, 'working']);
-    } else if (session) {
-      const updates: Record<string, string> = {
-        'tea_out': 'on_tea',
-        'tea_in': 'working',
-        'lunch_out': 'on_lunch',
-        'lunch_in': 'working',
-        'clock_out': 'done'
-      };
-
-      if (updates[action]) {
-        await db.run(`UPDATE sessions SET ${action} = ?, status = ? WHERE id = ?`, [ts, updates[action], session.id]);
-        
-        // Recalculate total hours if clocking out
-        if (action === 'clock_out') {
-          const updatedSession = await db.get('SELECT * FROM sessions WHERE id = ?', [session.id]);
-          const total = calculateHours(updatedSession);
-          await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, session.id]);
-        }
+      if (session) {
+        // If already exists, just update the clock_in time
+        await db.run('UPDATE sessions SET clock_in = ?, status = ? WHERE id = ?', [ts, 'working', session.id]);
+      } else {
+        await db.run('INSERT INTO sessions (date, clock_in, status) VALUES (?, ?, ?)', [today, ts, 'working']);
       }
+    } else {
+      // For any other action, we need a session. If none exists for today, create one with just this action
+      if (!session) {
+        await db.run(`INSERT INTO sessions (date, ${action}, status) VALUES (?, ?, ?)`, [today, ts, getStatusForAction(action)]);
+      } else {
+        await db.run(`UPDATE sessions SET ${action} = ?, status = ? WHERE id = ?`, [ts, getStatusForAction(action), session.id]);
+      }
+    }
+
+    // Always recalculate hours for the session
+    const currentSession = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
+    if (currentSession) {
+      const total = calculateHours(currentSession);
+      await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, currentSession.id]);
     }
 
     const updated = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL LIMIT 1', [today]);
     res.json(updated || { status: 'idle' });
   });
 
+  function getStatusForAction(action: string) {
+    const statuses: Record<string, string> = {
+      'clock_in': 'working',
+      'tea_out': 'on_tea',
+      'tea_in': 'working',
+      'lunch_out': 'on_lunch',
+      'lunch_in': 'working',
+      'clock_out': 'done'
+    };
+    return statuses[action] || 'working';
+  }
+
+  app.post('/api/sessions', async (req, res) => {
+    const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status } = req.body;
+    
+    const result = await db.run(
+      `INSERT INTO sessions (date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status || 'done']
+    );
+
+    const id = isPostgres ? result.rows[0].id : result.lastID;
+    const session = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
+    const total = calculateHours(session);
+    await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, id]);
+
+    res.json({ success: true, id });
+  });
+
   app.put('/api/sessions/:id', async (req, res) => {
     const { id } = req.params;
-    const { clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out } = req.body;
+    const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status } = req.body;
     
     await db.run(
       `UPDATE sessions SET 
-        clock_in = ?, tea_out = ?, tea_in = ?, 
-        lunch_out = ?, lunch_in = ?, clock_out = ?
+        date = ?, clock_in = ?, tea_out = ?, tea_in = ?, 
+        lunch_out = ?, lunch_in = ?, clock_out = ?, status = ?
       WHERE id = ?`,
-      [clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, id]
+      [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, id]
     );
 
     const updatedSession = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
@@ -178,8 +206,13 @@ async function startServer() {
   });
 
   app.delete('/api/sessions/:id', async (req, res) => {
-    await db.run('DELETE FROM sessions WHERE id = ?', [req.params.id]);
-    res.json({ success: true });
+    try {
+      await db.run('DELETE FROM sessions WHERE id = ?', [req.params.id]);
+      res.json({ success: true });
+    } catch (error) {
+      console.error('Delete error:', error);
+      res.status(500).json({ error: 'Failed to delete session' });
+    }
   });
 
   app.get('/api/export', async (req, res) => {

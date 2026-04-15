@@ -752,13 +752,6 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    fetch('/api/login-test')
-      .then(res => res.json())
-      .then(data => console.log('[LOGIN] Connectivity check:', data))
-      .catch(err => console.error('[LOGIN] Connectivity check failed:', err));
-  }, []);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -780,11 +773,11 @@ function Login({ onLogin }: { onLogin: () => void }) {
         toast.success('Welcome back, Nic!');
       } else {
         console.log('[LOGIN] Frontend: Failed', data.error);
-        toast.error(data.error || 'Login failed');
+        toast.error(data.error || 'Invalid username or password');
       }
     } catch (err) {
       console.error('[LOGIN] Frontend: Error', err);
-      toast.error('Connection error');
+      toast.error('Connection error: The server could not be reached. Please try again in a moment.');
     } finally {
       setLoading(false);
     }
@@ -831,26 +824,9 @@ function Login({ onLogin }: { onLogin: () => void }) {
               <Button 
                 type="submit" 
                 disabled={loading}
-                className="w-full h-12 bg-zinc-900 hover:bg-zinc-800 rounded-xl font-bold tracking-wide"
+                className="w-full h-12 bg-zinc-900 hover:bg-zinc-800 rounded-xl font-bold tracking-wide transition-all active:scale-[0.98]"
               >
                 {loading ? 'Signing in...' : 'Sign In'}
-              </Button>
-
-              <Button 
-                type="button" 
-                variant="outline"
-                disabled={loading}
-                onClick={() => {
-                  setUsername('admin');
-                  setPassword('Nic6604211989!');
-                  setTimeout(() => {
-                    const fakeEvent = { preventDefault: () => {} } as React.FormEvent;
-                    handleSubmit(fakeEvent);
-                  }, 100);
-                }}
-                className="w-full h-12 border-zinc-200 rounded-xl font-bold tracking-wide text-zinc-600"
-              >
-                Direct Login (Troubleshooting)
               </Button>
               
               <div className="flex justify-center">

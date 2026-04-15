@@ -21,6 +21,27 @@ async function startServer() {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
+  // Login route - MOVED TO TOP LEVEL for maximum reliability
+  app.post('/api/login', (req, res) => {
+    const { username, password } = req.body;
+    console.log(`[LOGIN] Request received - Body: ${JSON.stringify(req.body)}`);
+    
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    const normalizedUsername = username.toLowerCase().trim();
+    const normalizedPassword = password.trim();
+
+    if (normalizedUsername === 'admin' && normalizedPassword === 'Nic6604211989!') {
+      console.log('[LOGIN] Success for user: admin');
+      return res.json({ token: 'secret-token-nic-2026' });
+    } else {
+      console.log(`[LOGIN] Failed - Invalid credentials for: ${normalizedUsername}`);
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+  });
+
   // Database setup
   let db: any;
   const isPostgres = !!process.env.DATABASE_URL;
@@ -132,30 +153,6 @@ async function startServer() {
 
   router.get('/login-test', (req, res) => {
     res.json({ message: 'Login endpoint is reachable' });
-  });
-
-  router.post('/login', (req, res) => {
-    const { username, password } = req.body;
-    console.log(`[LOGIN] Request Body: ${JSON.stringify(req.body)}`);
-    console.log(`[LOGIN] Attempt - Username: "${username}", Password: "${password}"`);
-    
-    if (!username || !password) {
-      console.log('[LOGIN] Failed: Missing username or password');
-      return res.status(400).json({ error: 'Username and password are required' });
-    }
-
-    const normalizedUsername = username.toLowerCase().trim();
-    const normalizedPassword = password.trim();
-
-    console.log(`[LOGIN] Normalized - Username: "${normalizedUsername}", Password: "${normalizedPassword}"`);
-
-    if (normalizedUsername === 'admin' && normalizedPassword === 'Nic6604211989!') {
-      console.log('[LOGIN] Success');
-      res.json({ token: 'secret-token-nic-2026' });
-    } else {
-      console.log('[LOGIN] Failed: Invalid credentials');
-      res.status(401).json({ error: 'Invalid credentials' });
-    }
   });
 
   // Authentication middleware

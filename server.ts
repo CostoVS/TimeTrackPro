@@ -111,7 +111,7 @@ async function startServer() {
     }
   }
 
-  // API Routes under /timetrack
+  // API Routes
   const router = express.Router();
 
   router.get('/health', (req, res) => {
@@ -207,8 +207,6 @@ async function startServer() {
     res.send(csv);
   });
 
-  app.use('/timetrack/api', router);
-  // Also support /api for backward compatibility or direct proxying
   app.use('/api', router);
 
   function getStatusForAction(action: string) {
@@ -250,14 +248,7 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     console.log(`Serving static files from: ${distPath}`);
-    // Serve static files under /timetrack
-    app.use('/timetrack', express.static(distPath));
-    // Also serve at root just in case
     app.use(express.static(distPath));
-    
-    app.get('/timetrack/*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
     
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));

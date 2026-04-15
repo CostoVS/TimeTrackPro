@@ -3,6 +3,7 @@ version: '3.8'
 services:
   app:
     build: .
+    restart: always
     ports:
       - "8502:3000"
     environment:
@@ -12,6 +13,7 @@ services:
 
   db:
     image: postgres:15
+    restart: always
     environment:
       - POSTGRES_USER=timetrack
       - POSTGRES_PASSWORD=password

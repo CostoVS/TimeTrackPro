@@ -34,7 +34,46 @@ docker-compose up -d --build
 
 The application will now be accessible at `http://62.171.158.235:8502`.
 
-### 3. Updating the App
+### 4. SSL & Domain Setup (HTTPS)
+To secure your app with HTTPS on **masterchief.co.za**, follow these steps:
+
+**A. Install Nginx and Certbot**:
+```bash
+sudo apt update
+sudo apt install nginx certbot python3-certbot-nginx -y
+```
+
+**B. Configure Nginx**:
+Create a config file: `sudo nano /etc/nginx/sites-available/timetrack`
+Paste this content (this sets the app to run on `masterchief.co.za/timetrack`):
+```nginx
+server {
+    listen 80;
+    server_name masterchief.co.za;
+
+    location /timetrack/ {
+        proxy_pass http://localhost:8502/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        
+        # Ensure trailing slashes are handled
+        proxy_redirect off;
+    }
+}
+```
+
+**C. Enable and Get SSL**:
+```bash
+sudo ln -s /etc/nginx/sites-available/timetrack /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+sudo certbot --nginx -d masterchief.co.za
+```
+
+### 5. Updating the App
 When you push new changes to GitHub, pull them on your server and restart the container:
 ```bash
 git pull origin main

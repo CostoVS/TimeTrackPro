@@ -91,8 +91,8 @@ export default function App() {
   const fetchData = async () => {
     try {
       const [sessionsRes, currentRes] = await Promise.all([
-        fetch('/api/sessions'),
-        fetch('/api/sessions/current')
+        fetch('api/sessions'),
+        fetch('api/sessions/current')
       ]);
       const sessionsData = await sessionsRes.json();
       const currentData = await currentRes.json();
@@ -110,7 +110,7 @@ export default function App() {
     const now = new Date().toISOString();
     setIsActionLoading(true);
     try {
-      const res = await fetch('/api/sessions/action', {
+      const res = await fetch('api/sessions/action', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action, timestamp: now })
@@ -137,7 +137,7 @@ export default function App() {
     setIdToDelete(null);
     try {
       setSessions(prev => prev.filter(s => s.id !== id));
-      const res = await fetch(`/api/sessions/${id}`, { method: 'DELETE' });
+      const res = await fetch(`api/sessions/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       
       if (currentSession?.id === id) {
@@ -155,7 +155,7 @@ export default function App() {
     e.preventDefault();
     if (!editingSession) return;
     try {
-      await fetch(`/api/sessions/${editingSession.id}`, {
+      await fetch(`api/sessions/${editingSession.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(editingSession)
@@ -171,7 +171,7 @@ export default function App() {
   const handleAddManual = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await fetch('/api/sessions', {
+      await fetch('api/sessions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(manualSession)

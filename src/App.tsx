@@ -748,21 +748,28 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    console.log('[LOGIN] Frontend: Attempting login for', username);
     try {
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username, password }),
       });
+      
+      console.log('[LOGIN] Frontend: Response status', res.status);
       const data = await res.json();
+      
       if (res.ok) {
+        console.log('[LOGIN] Frontend: Success');
         localStorage.setItem('nic_token', data.token);
         onLogin();
         toast.success('Welcome back, Nic!');
       } else {
+        console.log('[LOGIN] Frontend: Failed', data.error);
         toast.error(data.error || 'Login failed');
       }
     } catch (err) {
+      console.error('[LOGIN] Frontend: Error', err);
       toast.error('Connection error');
     } finally {
       setLoading(false);

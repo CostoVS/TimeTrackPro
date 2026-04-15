@@ -51,6 +51,16 @@ server {
     listen 80;
     server_name masterchief.co.za;
 
+    # Automatically send people to /timetrack/ if they hit the main domain
+    location = / {
+        return 301 /timetrack/;
+    }
+
+    # Handle /timetrack (no trailing slash)
+    location = /timetrack {
+        return 301 /timetrack/;
+    }
+
     location /timetrack/ {
         proxy_pass http://localhost:8502/;
         proxy_http_version 1.1;

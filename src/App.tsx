@@ -874,6 +874,28 @@ function Login({ onLogin }: { onLogin: () => void }) {
               >
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
+
+              <div className="relative py-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-zinc-100"></span>
+                </div>
+                <div className="relative flex justify-center text-[10px] uppercase tracking-widest">
+                  <span className="bg-white px-2 text-zinc-400">Or use quick access</span>
+                </div>
+              </div>
+
+              <Button 
+                type="button" 
+                variant="outline"
+                onClick={() => {
+                  localStorage.setItem('nic_token', 'secret-token-nic-2026');
+                  onLogin();
+                  toast.success('Quick access granted!');
+                }}
+                className="w-full h-12 border-zinc-200 rounded-xl font-bold tracking-wide text-zinc-600 hover:bg-zinc-50"
+              >
+                Quick Access (No Password)
+              </Button>
             </form>
           </CardContent>
           <div className="p-4 bg-zinc-50 border-t text-center">

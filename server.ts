@@ -264,6 +264,12 @@ async function startServer() {
 
   app.use('/api', router);
 
+  // Global error handler
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('[SERVER ERROR]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  });
+
   function getStatusForAction(action: string) {
     const statuses: Record<string, string> = {
       'clock_in': 'working',

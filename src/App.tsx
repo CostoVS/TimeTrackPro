@@ -25,7 +25,9 @@ import {
   LayoutDashboard,
   Timer,
   FileDown,
-  Info
+  Info,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isWithinInterval, differenceInSeconds } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -750,6 +752,7 @@ export default function App() {
 function Login({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -764,20 +767,28 @@ function Login({ onLogin }: { onLogin: () => void }) {
       });
       
       console.log('[LOGIN] Frontend: Response status', res.status);
-      const data = await res.json();
       
       if (res.ok) {
+        const data = await res.json();
         console.log('[LOGIN] Frontend: Success');
         localStorage.setItem('nic_token', data.token);
         onLogin();
         toast.success('Welcome back, Nic!');
       } else {
-        console.log('[LOGIN] Frontend: Failed', data.error);
-        toast.error(data.error || 'Invalid username or password');
+        let errorMsg = 'Invalid username or password';
+        try {
+          const data = await res.json();
+          errorMsg = data.error || errorMsg;
+        } catch (e) {
+          console.error('[LOGIN] Failed to parse error response', e);
+        }
+        console.log('[LOGIN] Frontend: Failed', errorMsg);
+        toast.error(errorMsg);
       }
     } catch (err) {
-      console.error('[LOGIN] Frontend: Error', err);
-      toast.error('Connection error: The server could not be reached. Please try again in a moment.');
+      console.error('[LOGIN] Frontend: Connection Error Details:', err);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(`Connection error: ${message}. Please check your internet or try again.`);
     } finally {
       setLoading(false);
     }
@@ -804,22 +815,33 @@ function Login({ onLogin }: { onLogin: () => void }) {
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Username</Label>
                 <Input 
                   required
+                  autoComplete="username"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  placeholder="admin"
+                  placeholder="Enter your username"
                   className="h-12 border-zinc-200"
                 />
               </div>
               <div className="space-y-2">
                 <Label className="text-[10px] font-bold uppercase tracking-widest text-zinc-400">Password</Label>
-                <Input 
-                  type="password"
-                  required
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  className="h-12 border-zinc-200"
-                />
+                <div className="relative">
+                  <Input 
+                    type={showPassword ? "text" : "password"}
+                    required
+                    autoComplete="current-password"
+                    value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="h-12 border-zinc-200 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-600"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
               <Button 
                 type="submit" 
@@ -828,17 +850,6 @@ function Login({ onLogin }: { onLogin: () => void }) {
               >
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
-              
-              <div className="flex justify-center">
-                <Button 
-                  type="button" 
-                  variant="link" 
-                  onClick={() => { setUsername('admin'); setPassword('Nic6604211989!'); }}
-                  className="text-[10px] text-zinc-400 hover:text-zinc-600 uppercase tracking-widest"
-                >
-                  Click here to auto-fill credentials
-                </Button>
-              </div>
             </form>
           </CardContent>
           <div className="p-4 bg-zinc-50 border-t text-center">

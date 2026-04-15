@@ -249,7 +249,15 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    // Serve static files under /timetrack
+    app.use('/timetrack', express.static(distPath));
+    // Also serve at root just in case
     app.use(express.static(distPath));
+    
+    app.get('/timetrack/*', (req, res) => {
+      res.sendFile(path.join(distPath, 'index.html'));
+    });
+    
     app.get('*', (req, res) => {
       res.sendFile(path.join(distPath, 'index.html'));
     });

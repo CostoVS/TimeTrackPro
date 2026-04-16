@@ -30,12 +30,10 @@ async function startServer() {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const normalizedUsername = username.toLowerCase().trim();
-    const normalizedPassword = password.trim();
+    const normalizedUsername = String(username).toLowerCase().trim();
+    const normalizedPassword = String(password).trim();
 
-    // Log character codes to detect hidden characters
-    const passCodes = Array.from(normalizedPassword).map(c => c.charCodeAt(0)).join(',');
-    console.log(`[LOGIN] Attempt - User: "${normalizedUsername}", Pass: "${normalizedPassword}" (Codes: ${passCodes})`);
+    console.log(`[LOGIN] Attempt - User: "${normalizedUsername}", Pass: "${normalizedPassword}"`);
 
     // Extremely robust comparison
     const isUserAdmin = normalizedUsername === 'admin';

@@ -295,29 +295,29 @@ export default function App() {
   const currentStatus = currentSession?.status || 'idle';
 
   return (
-    <div className="min-h-screen bg-zinc-50/50">
+    <div className="min-h-screen bg-black">
       <Toaster position="top-center" richColors />
       
       {/* Navigation */}
-      <nav className="sticky top-0 z-40 w-full border-b border-zinc-800 bg-zinc-950/80 backdrop-blur-md">
+      <nav className="sticky top-0 z-40 w-full border-b border-zinc-800 bg-black/80 backdrop-blur-md">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between h-16 items-center">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 bg-white rounded-lg flex items-center justify-center text-zinc-950 shadow-lg shadow-white/10">
-                <Clock className="w-5 h-5" />
+          <div className="flex justify-between h-20 items-center">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center text-white shadow-lg shadow-orange-500/20">
+                <Clock className="w-6 h-6" />
               </div>
               <div>
-                <span className="text-lg font-bold tracking-tight text-white">TimeTrack Pro</span>
-                <Badge variant="outline" className="ml-2 text-[10px] py-0 h-5 border-zinc-800 text-zinc-500">v2.1</Badge>
+                <span className="text-xl font-black tracking-tighter text-white uppercase">TimeTrack Pro</span>
+                <Badge variant="outline" className="ml-3 text-[10px] py-0 h-5 border-zinc-800 text-zinc-500 font-black">v2.2</Badge>
               </div>
             </div>
 
-            <div className="hidden md:flex items-center gap-1 bg-zinc-900 p-1 rounded-lg border border-zinc-800">
+            <div className="hidden md:flex items-center gap-1 bg-zinc-900 p-1 rounded-xl border border-zinc-800">
               <Button 
                 variant={viewMode === 'dashboard' ? 'secondary' : 'ghost'} 
                 size="sm" 
                 onClick={() => setViewMode('dashboard')}
-                className={`gap-2 ${viewMode === 'dashboard' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
+                className={`gap-2 rounded-lg px-4 font-bold uppercase text-[10px] tracking-widest ${viewMode === 'dashboard' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:text-white'}`}
               >
                 <LayoutDashboard className="w-4 h-4" />
                 Dashboard
@@ -326,14 +326,14 @@ export default function App() {
                 variant={viewMode === 'history' ? 'secondary' : 'ghost'} 
                 size="sm" 
                 onClick={() => setViewMode('history')}
-                className={`gap-2 ${viewMode === 'history' ? 'bg-zinc-800 text-white' : 'text-zinc-500 hover:text-white'}`}
+                className={`gap-2 rounded-lg px-4 font-bold uppercase text-[10px] tracking-widest ${viewMode === 'history' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:text-white'}`}
               >
                 <History className="w-4 h-4" />
                 History
               </Button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-3">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -341,17 +341,17 @@ export default function App() {
                   setEditingSession({ date: format(new Date(), 'yyyy-MM-dd'), is_paid: 1, leave_hours: 8 });
                   setIsModalOpen(true);
                 }}
-                className="hidden sm:flex gap-2 bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800"
+                className="hidden sm:flex gap-2 bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl font-bold uppercase text-[10px] tracking-widest h-10 px-5"
               >
                 <Plus className="w-4 h-4" />
                 Add Entry
               </Button>
-              <Button size="sm" onClick={exportPDF} className="gap-2 bg-white text-zinc-950 hover:bg-zinc-200">
+              <Button size="sm" onClick={exportPDF} className="gap-2 bg-white text-zinc-950 hover:bg-zinc-200 rounded-xl font-bold uppercase text-[10px] tracking-widest h-10 px-5">
                 <FileDown className="w-4 h-4" />
-                Export PDF
+                Export
               </Button>
-              <Button variant="ghost" size="icon" onClick={handleLogout} className="text-zinc-500 hover:text-red-400">
-                <LogOut className="w-4 h-4" />
+              <Button variant="ghost" size="icon" onClick={handleLogout} className="text-zinc-500 hover:text-orange-500 h-10 w-10">
+                <LogOut className="w-5 h-5" />
               </Button>
             </div>
           </div>
@@ -394,21 +394,21 @@ export default function App() {
                         label="Clock In" 
                         active={currentStatus === 'idle'} 
                         onClick={() => handleAction('clock_in')}
-                        variant="emerald"
+                        variant="orange"
                       />
                       <ActionButton 
                         icon={Coffee} 
-                        label={currentStatus === 'on_tea' ? "End Tea" : "Tea Break"} 
+                        label={currentStatus === 'on_tea' ? "Back to Work" : "Tea Break"} 
                         active={currentStatus === 'working' || currentStatus === 'on_tea'} 
                         onClick={() => handleAction(currentStatus === 'on_tea' ? 'tea_in' : 'tea_out')}
-                        variant="amber"
+                        variant="orange"
                       />
                       <ActionButton 
                         icon={Utensils} 
-                        label={currentStatus === 'on_lunch' ? "End Lunch" : "Lunch Break"} 
+                        label={currentStatus === 'on_lunch' ? "Back to Work" : "Lunch Break"} 
                         active={currentStatus === 'working' || currentStatus === 'on_tea' || currentStatus === 'on_lunch'} 
                         onClick={() => handleAction(currentStatus === 'on_lunch' ? 'lunch_in' : 'lunch_out')}
-                        variant="blue"
+                        variant="orange"
                       />
                       <ActionButton 
                         icon={LogOut} 
@@ -471,13 +471,13 @@ export default function App() {
             </div>
 
             {/* Recent Activity Mini-Table */}
-            <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-xl shadow-black/20">
+            <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-xl shadow-black/20 orange-glow">
               <CardHeader className="flex flex-row items-center justify-between border-b border-zinc-800/50">
                 <div>
-                  <CardTitle className="text-lg font-bold text-white">Recent Activity</CardTitle>
-                  <CardDescription className="text-zinc-500">Your last 5 sessions</CardDescription>
+                  <CardTitle className="text-lg font-black text-white uppercase tracking-tight">Recent Activity</CardTitle>
+                  <CardDescription className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">Your last 5 sessions</CardDescription>
                 </div>
-                <Button variant="ghost" size="sm" onClick={() => setViewMode('history')} className="text-zinc-500 hover:text-white hover:bg-zinc-800">
+                <Button variant="ghost" size="sm" onClick={() => setViewMode('history')} className="text-zinc-500 hover:text-orange-500 hover:bg-orange-500/10 rounded-lg font-bold uppercase text-[10px] tracking-widest">
                   View All <ChevronRight className="w-4 h-4 ml-1" />
                 </Button>
               </CardHeader>
@@ -517,16 +517,16 @@ export default function App() {
           </>
         ) : (
           /* Full History View */
-          <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-2xl shadow-black/50 overflow-hidden">
+          <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-2xl shadow-black/50 overflow-hidden orange-glow">
             <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
               <div>
-                <CardTitle className="text-2xl font-bold tracking-tight text-white">Attendance History</CardTitle>
-                <CardDescription className="text-zinc-500">Detailed logs of your work and leave sessions</CardDescription>
+                <CardTitle className="text-2xl font-black tracking-tighter text-white uppercase">Attendance History</CardTitle>
+                <CardDescription className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">Detailed logs of your work and leave sessions</CardDescription>
               </div>
-              <div className="flex items-center gap-2 bg-zinc-950 p-1 rounded-lg border border-zinc-800">
-                <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-white" onClick={() => setViewDate(subMonths(viewDate, 1))}><ChevronLeft className="w-4 h-4" /></Button>
+              <div className="flex items-center gap-2 bg-black p-1 rounded-xl border border-zinc-800">
+                <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-orange-500" onClick={() => setViewDate(subMonths(viewDate, 1))}><ChevronLeft className="w-4 h-4" /></Button>
                 <span className="text-sm font-black px-4 min-w-[140px] text-center text-zinc-200 uppercase tracking-widest">{format(viewDate, 'MMMM yyyy')}</span>
-                <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-white" onClick={() => setViewDate(addMonths(viewDate, 1))}><ChevronRight className="w-4 h-4" /></Button>
+                <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-orange-500" onClick={() => setViewDate(addMonths(viewDate, 1))}><ChevronRight className="w-4 h-4" /></Button>
               </div>
             </CardHeader>
             <CardContent className="p-0">
@@ -575,22 +575,22 @@ export default function App() {
                           <span className="font-black text-white">{s.total_hours.toFixed(2)}h</span>
                         </TableCell>
                         <TableCell className="text-right px-6">
-                          <div className="flex justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <div className="flex justify-end gap-2">
                             <Button 
                               variant="ghost" 
                               size="icon" 
-                              className="h-8 w-8 text-zinc-400 hover:text-white hover:bg-zinc-800" 
+                              className="h-9 w-9 text-zinc-400 hover:text-orange-500 hover:bg-orange-500/10 rounded-lg" 
                               onClick={() => {
                                 setEditingSession(s);
                                 setIsModalOpen(true);
                               }}
                             >
-                              <Edit2 className="w-3.5 h-3.5" />
+                              <Edit2 className="w-4 h-4" />
                             </Button>
                             <Dialog>
                               <DialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-500 hover:text-red-400 hover:bg-red-400/10">
-                                  <Trash2 className="w-3.5 h-3.5" />
+                                <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg">
+                                  <Trash2 className="w-4 h-4" />
                                 </Button>
                               </DialogTrigger>
                               <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
@@ -626,17 +626,17 @@ export default function App() {
 
       {/* Entry Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden border-none shadow-2xl">
-          <DialogHeader className="bg-zinc-950 text-white p-10 border-b border-zinc-800">
+        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden border-none shadow-2xl orange-glow">
+          <DialogHeader className="bg-black text-white p-10 border-b border-zinc-800">
             <div className="flex items-center gap-4 mb-2">
-              <div className="w-12 h-12 bg-white text-zinc-950 rounded-xl flex items-center justify-center shadow-xl shadow-white/10">
+              <div className="w-12 h-12 bg-orange-500 text-white rounded-xl flex items-center justify-center shadow-xl shadow-orange-500/20">
                 {editingSession?.id ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
               </div>
               <div>
-                <DialogTitle className="text-3xl font-black tracking-tighter">
+                <DialogTitle className="text-3xl font-black tracking-tighter uppercase">
                   {editingSession?.id ? 'Edit Entry' : 'Manual Entry'}
                 </DialogTitle>
-                <DialogDescription className="text-zinc-500 mt-1">
+                <DialogDescription className="text-zinc-500 mt-1 font-bold uppercase tracking-widest text-[10px]">
                   {editingSession?.id ? 'Update session details' : 'Add a new session manually'}
                 </DialogDescription>
               </div>
@@ -652,7 +652,7 @@ export default function App() {
                   required
                   value={editingSession?.date || ''}
                   onChange={e => setEditingSession({ ...editingSession, date: e.target.value })}
-                  className="h-14 bg-zinc-950 border-zinc-800 text-white focus:ring-zinc-700 rounded-xl"
+                  className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 focus:border-orange-500 rounded-xl"
                 />
               </div>
               <div className="space-y-3">
@@ -661,11 +661,11 @@ export default function App() {
                   value={editingSession?.leave_type || 'work'} 
                   onValueChange={v => setEditingSession({ ...editingSession, leave_type: v === 'work' ? null : v })}
                 >
-                  <SelectTrigger className="h-14 bg-zinc-950 border-zinc-800 text-white focus:ring-zinc-700 rounded-xl">
+                  <SelectTrigger className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl">
                     <SelectValue placeholder="Select type" />
                   </SelectTrigger>
                   <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
-                    <SelectItem value="work">Regular Work</SelectItem>
+                    <SelectItem value="work">Regular Work Day</SelectItem>
                     {LEAVE_TYPES.map(l => (
                       <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
                     ))}
@@ -678,7 +678,7 @@ export default function App() {
               <motion.div 
                 initial={{ opacity: 0, y: -10 }} 
                 animate={{ opacity: 1, y: 0 }}
-                className="grid grid-cols-2 gap-8 p-6 bg-zinc-950 rounded-xl border border-zinc-800"
+                className="grid grid-cols-2 gap-8 p-6 bg-black rounded-xl border border-zinc-800"
               >
                 <div className="space-y-3">
                   <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Leave Hours</Label>
@@ -687,7 +687,7 @@ export default function App() {
                     step="0.5"
                     value={editingSession?.leave_hours || 0}
                     onChange={e => setEditingSession({ ...editingSession, leave_hours: parseFloat(e.target.value) })}
-                    className="h-14 bg-zinc-900 border-zinc-800 text-white focus:ring-zinc-700 rounded-xl" 
+                    className="h-14 bg-zinc-900 border-zinc-800 text-white focus:ring-orange-500 rounded-xl" 
                   />
                 </div>
                 <div className="space-y-3">
@@ -697,7 +697,7 @@ export default function App() {
                       id="is_paid" 
                       checked={!!editingSession?.is_paid}
                       onCheckedChange={c => setEditingSession({ ...editingSession, is_paid: c ? 1 : 0 })}
-                      className="border-zinc-700 data-[state=checked]:bg-white data-[state=checked]:text-zinc-950"
+                      className="border-zinc-700 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
                     />
                     <label htmlFor="is_paid" className="text-sm font-bold text-zinc-400 cursor-pointer uppercase tracking-widest">Paid Leave</label>
                   </div>
@@ -714,7 +714,7 @@ export default function App() {
                       const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                       setEditingSession({ ...editingSession, clock_in: `${date}T${e.target.value}:00` });
                     }}
-                    className="h-14 bg-zinc-950 border-zinc-800 text-white focus:ring-zinc-700 rounded-xl" 
+                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl" 
                   />
                 </div>
                 <div className="space-y-3">
@@ -726,7 +726,7 @@ export default function App() {
                       const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                       setEditingSession({ ...editingSession, clock_out: `${date}T${e.target.value}:00` });
                     }}
-                    className="h-14 bg-zinc-950 border-zinc-800 text-white focus:ring-zinc-700 rounded-xl" 
+                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl" 
                   />
                 </div>
               </div>
@@ -737,14 +737,14 @@ export default function App() {
               <textarea 
                 value={editingSession?.notes || ''}
                 onChange={e => setEditingSession({ ...editingSession, notes: e.target.value })}
-                className="w-full min-h-[120px] p-5 bg-zinc-950 border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-zinc-700 transition-all text-sm text-white" 
+                className="w-full min-h-[120px] p-5 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm text-white" 
                 placeholder="Add any specific details about this session..."
               />
             </div>
 
             <div className="flex gap-4 pt-4">
-              <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="flex-1 h-14 rounded-xl text-zinc-500 hover:text-white hover:bg-zinc-800">Cancel</Button>
-              <Button type="submit" className="flex-1 h-14 rounded-xl bg-white text-zinc-950 hover:bg-zinc-200 gap-2 font-black uppercase tracking-widest shadow-xl shadow-white/5">
+              <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="flex-1 h-14 rounded-xl text-zinc-500 hover:text-white hover:bg-zinc-800 font-bold uppercase tracking-widest">Cancel</Button>
+              <Button type="submit" className="flex-1 h-14 rounded-xl bg-orange-500 text-white hover:bg-orange-600 gap-2 font-black uppercase tracking-widest shadow-xl shadow-orange-500/20">
                 <Save className="w-5 h-5" />
                 Save Entry
               </Button>
@@ -761,23 +761,6 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [clickCount, setClickCount] = useState(0);
-
-  const handleBypass = () => {
-    const newCount = clickCount + 1;
-    setClickCount(newCount);
-    if (newCount >= 5) {
-      localStorage.setItem('nic_token', 'secret-token-nic-2026');
-      onLogin();
-      toast.success('Bypass Activated: Welcome Nic!');
-    }
-  };
-
-  const quickAccess = () => {
-    setUsername('admin');
-    setPassword('Nic6604211989!');
-    toast.info('Credentials loaded. Click Sign In.');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -823,44 +806,35 @@ function Login({ onLogin }: { onLogin: () => void }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-zinc-950 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-black p-4">
       <motion.div 
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-md"
       >
-        <Card className="border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden">
-          <CardHeader className="bg-zinc-950 text-white p-10 text-center border-b border-zinc-800">
-            <div className="w-14 h-14 bg-white text-zinc-950 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
-              <Clock className="w-7 h-7" />
+        <Card className="border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden orange-glow">
+          <CardHeader className="bg-black text-white p-10 text-center border-b border-zinc-800">
+            <div className="w-16 h-16 bg-orange-500 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-orange-500/20">
+              <Clock className="w-8 h-8" />
             </div>
-            <CardTitle 
-              className="text-3xl font-black tracking-tighter cursor-pointer select-none active:scale-95 transition-transform"
-              onClick={handleBypass}
-            >
-              TimeTrack Pro
-            </CardTitle>
-            <CardDescription className="text-zinc-500 mt-2">Secure Authentication Required</CardDescription>
+            <CardTitle className="text-3xl font-black tracking-tighter uppercase">TimeTrack Pro</CardTitle>
+            <CardDescription className="text-zinc-500 mt-2 font-bold uppercase tracking-widest text-[10px]">Secure Authentication Required</CardDescription>
           </CardHeader>
           <CardContent className="p-10 bg-zinc-900">
             <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
-              {/* Fake inputs to fool browser autofill */}
-              <input type="text" style={{ display: 'none' }} />
-              <input type="password" style={{ display: 'none' }} />
-              
               <div className="space-y-3">
-                <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Username</Label>
+                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Username</Label>
                 <Input 
                   required
                   autoComplete="off"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
                   placeholder="Enter username"
-                  className="h-14 bg-zinc-950 border-zinc-800 text-white focus:ring-zinc-700 rounded-xl"
+                  className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 focus:border-orange-500 rounded-xl"
                 />
               </div>
               <div className="space-y-3">
-                <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Password</Label>
+                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Password</Label>
                 <div className="relative">
                   <Input 
                     type={showPassword ? "text" : "password"}
@@ -869,12 +843,12 @@ function Login({ onLogin }: { onLogin: () => void }) {
                     value={password}
                     onChange={e => setPassword(e.target.value)}
                     placeholder="Enter password"
-                    className="h-14 bg-zinc-950 border-zinc-800 text-white focus:ring-zinc-700 rounded-xl pr-12"
+                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 focus:border-orange-500 rounded-xl pr-12"
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white transition-colors"
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-orange-500 transition-colors"
                   >
                     {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
                   </button>
@@ -883,24 +857,15 @@ function Login({ onLogin }: { onLogin: () => void }) {
               <Button 
                 type="submit" 
                 disabled={loading}
-                className="w-full h-14 bg-white text-zinc-950 hover:bg-zinc-200 rounded-xl font-black text-lg tracking-tight transition-all active:scale-[0.98] shadow-lg shadow-white/5"
+                className="w-full h-14 bg-orange-500 text-white hover:bg-orange-600 rounded-xl font-black text-lg tracking-tight transition-all active:scale-[0.98] shadow-lg shadow-orange-500/20 uppercase"
               >
                 {loading ? 'Authenticating...' : 'Sign In'}
               </Button>
-
-              <Button 
-                type="button"
-                variant="ghost"
-                onClick={quickAccess}
-                className="w-full h-10 text-zinc-600 hover:text-zinc-400 text-[10px] font-bold uppercase tracking-widest"
-              >
-                Quick Access (No Password)
-              </Button>
             </form>
           </CardContent>
-          <div className="p-6 bg-zinc-950 border-t border-zinc-800 text-center">
+          <div className="p-6 bg-black border-t border-zinc-800 text-center">
             <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.3em]">
-              System Version 2.1.0
+              System Version 2.2.0
             </p>
           </div>
         </Card>
@@ -911,9 +876,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
 
 function ActionButton({ icon: Icon, label, active, onClick, variant }: any) {
   const variants: any = {
-    emerald: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20 hover:bg-emerald-500/20 shadow-emerald-500/5',
-    amber: 'bg-amber-500/10 text-amber-400 border-amber-500/20 hover:bg-amber-500/20 shadow-amber-500/5',
-    blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20 hover:bg-blue-500/20 shadow-blue-500/5',
+    orange: 'bg-orange-500/10 text-orange-500 border-orange-500/20 hover:bg-orange-500/20 shadow-orange-500/5',
     zinc: 'bg-zinc-800 text-zinc-400 border-zinc-700 hover:bg-zinc-700 shadow-zinc-900/50',
   };
 
@@ -921,7 +884,7 @@ function ActionButton({ icon: Icon, label, active, onClick, variant }: any) {
     <button 
       onClick={onClick}
       disabled={!active}
-      className={`flex flex-col items-center justify-center gap-4 p-6 rounded-2xl border shadow-lg transition-all active:scale-95 disabled:opacity-20 disabled:grayscale disabled:pointer-events-none ${variants[variant]}`}
+      className={`flex flex-col items-center justify-center gap-4 p-6 rounded-2xl border shadow-lg transition-all active:scale-95 disabled:opacity-20 disabled:grayscale disabled:pointer-events-none ${variants[variant] || variants.zinc}`}
     >
       <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center shadow-inner">
         <Icon className="w-6 h-6" />
@@ -933,14 +896,14 @@ function ActionButton({ icon: Icon, label, active, onClick, variant }: any) {
 
 function StatCard({ label, value, icon: Icon, description, trend, variant = 'default' }: any) {
   return (
-    <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-xl overflow-hidden group">
+    <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-xl overflow-hidden group orange-glow">
       <CardContent className="p-6">
         <div className="flex items-center justify-between mb-6">
-          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${variant === 'zinc' ? 'bg-zinc-800 text-zinc-500' : 'bg-white text-zinc-950 shadow-xl shadow-white/10'}`}>
+          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${variant === 'zinc' ? 'bg-zinc-800 text-zinc-500' : 'bg-orange-500 text-white shadow-xl shadow-orange-500/20'}`}>
             <Icon className="w-6 h-6" />
           </div>
           {trend && (
-            <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-400 border-none text-[10px] font-black px-3 py-1">
+            <Badge variant="secondary" className="bg-orange-500/10 text-orange-500 border-none text-[10px] font-black px-3 py-1">
               {trend}
             </Badge>
           )}
@@ -951,7 +914,7 @@ function StatCard({ label, value, icon: Icon, description, trend, variant = 'def
           <p className="text-xs text-zinc-400 font-medium">{description}</p>
         </div>
       </CardContent>
-      <div className="h-1.5 w-full bg-zinc-800 group-hover:bg-white transition-all duration-500" />
+      <div className="h-1.5 w-full bg-zinc-800 group-hover:bg-orange-500 transition-all duration-500" />
     </Card>
   );
 }

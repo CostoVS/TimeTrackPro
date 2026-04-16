@@ -39,7 +39,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -410,14 +410,14 @@ export default function App() {
                       />
                       <ActionButton 
                         icon={Coffee} 
-                        label={currentStatus === 'on_tea' ? "Back to Work" : "Tea Break"} 
+                        label={currentStatus === 'on_tea' ? "Return from Tea" : "Tea Break"} 
                         active={currentStatus === 'working' || currentStatus === 'on_tea'} 
                         onClick={() => handleAction(currentStatus === 'on_tea' ? 'tea_in' : 'tea_out')}
                         variant="orange"
                       />
                       <ActionButton 
                         icon={Utensils} 
-                        label={currentStatus === 'on_lunch' ? "Back to Work" : "Lunch Break"} 
+                        label={currentStatus === 'on_lunch' ? "Return from Lunch" : "Lunch Break"} 
                         active={currentStatus === 'working' || currentStatus === 'on_tea' || currentStatus === 'on_lunch'} 
                         onClick={() => handleAction(currentStatus === 'on_lunch' ? 'lunch_in' : 'lunch_out')}
                         variant="orange"
@@ -541,87 +541,89 @@ export default function App() {
                 <Button variant="ghost" size="icon" className="text-zinc-500 hover:text-orange-500" onClick={() => setViewDate(addMonths(viewDate, 1))}><ChevronRight className="w-4 h-4" /></Button>
               </div>
             </CardHeader>
-            <CardContent className="p-0">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-zinc-950/50 border-zinc-800 hover:bg-zinc-950/50">
-                    <TableHead className="px-6 text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Date</TableHead>
-                    <TableHead className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Type</TableHead>
-                    <TableHead className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Clock In</TableHead>
-                    <TableHead className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Tea Break</TableHead>
-                    <TableHead className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Lunch Break</TableHead>
-                    <TableHead className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Clock Out</TableHead>
-                    <TableHead className="text-right text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Total</TableHead>
-                    <TableHead className="text-right px-6 text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {sessions
-                    .filter(s => format(parseISO(s.date), 'yyyy-MM') === format(viewDate, 'yyyy-MM'))
-                    .sort((a, b) => b.date.localeCompare(a.date))
-                    .map((s) => (
-                      <TableRow key={s.id} className="group border-zinc-800 hover:bg-zinc-800/30 transition-colors">
-                        <TableCell className="px-6">
-                          <div className="font-black text-white">{format(parseISO(s.date), 'dd MMM')}</div>
-                          <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{format(parseISO(s.date), 'EEEE')}</div>
-                        </TableCell>
-                        <TableCell>
-                          {s.leave_type ? (
-                            <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${LEAVE_TYPES.find(l => l.id === s.leave_type)?.bg} ${LEAVE_TYPES.find(l => l.id === s.leave_type)?.color} ${LEAVE_TYPES.find(l => l.id === s.leave_type)?.border}`}>
-                              {React.createElement(LEAVE_TYPES.find(l => l.id === s.leave_type)?.icon || Info, { className: "w-3 h-3" })}
-                              {LEAVE_TYPES.find(l => l.id === s.leave_type)?.label}
-                            </div>
-                          ) : (
-                            <Badge variant="outline" className="text-zinc-500 border-zinc-800 font-black text-[10px] uppercase tracking-wider">Work</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-zinc-400">{s.clock_in ? format(parseISO(s.clock_in), 'HH:mm') : '-'}</TableCell>
-                        <TableCell className="font-mono text-[10px] text-zinc-500">
-                          {s.tea_out ? `${format(parseISO(s.tea_out), 'HH:mm')} - ${s.tea_in ? format(parseISO(s.tea_in), 'HH:mm') : '...'}` : '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-[10px] text-zinc-500">
-                          {s.lunch_out ? `${format(parseISO(s.lunch_out), 'HH:mm')} - ${s.lunch_in ? format(parseISO(s.lunch_in), 'HH:mm') : '...'}` : '-'}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-zinc-400">{s.clock_out ? format(parseISO(s.clock_out), 'HH:mm') : '-'}</TableCell>
-                        <TableCell className="text-right">
-                          <span className="font-black text-white">{s.total_hours.toFixed(2)}h</span>
-                        </TableCell>
-                        <TableCell className="text-right px-6">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              variant="ghost" 
-                              size="icon" 
-                              className="h-9 w-9 text-zinc-400 hover:text-orange-500 hover:bg-orange-500/10 rounded-lg" 
-                              onClick={() => {
-                                setEditingSession(s);
-                                setIsModalOpen(true);
-                              }}
-                            >
-                              <Edit2 className="w-4 h-4" />
-                            </Button>
-                            <Dialog>
-                              <DialogTrigger asChild>
-                                <Button variant="ghost" size="icon" className="h-9 w-9 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg">
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
-                                <DialogHeader>
-                                  <DialogTitle>Delete Entry</DialogTitle>
-                                  <DialogDescription className="text-zinc-500">Are you sure you want to delete this session? This action cannot be undone.</DialogDescription>
-                                </DialogHeader>
-                                <DialogFooter>
-                                  <Button variant="outline" className="bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white" onClick={() => {}}>Cancel</Button>
-                                  <Button variant="destructive" onClick={() => deleteSession(s.id)}>Delete</Button>
-                                </DialogFooter>
-                              </DialogContent>
-                            </Dialog>
+            <CardContent className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {sessions
+                  .filter(s => format(parseISO(s.date), 'yyyy-MM') === format(viewDate, 'yyyy-MM'))
+                  .sort((a, b) => b.date.localeCompare(a.date))
+                  .map((s) => (
+                    <Card key={s.id} className="bg-zinc-950/50 border-zinc-800 hover:border-zinc-700 transition-colors overflow-hidden group">
+                      <div className="p-4 flex flex-col gap-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="font-black text-white text-lg">{format(parseISO(s.date), 'dd MMM')}</div>
+                            <div className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{format(parseISO(s.date), 'EEEE')}</div>
                           </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
+                          <div className="flex flex-col items-end gap-2">
+                            {s.leave_type ? (
+                              <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-black uppercase tracking-wider border ${LEAVE_TYPES.find(l => l.id === s.leave_type)?.bg} ${LEAVE_TYPES.find(l => l.id === s.leave_type)?.color} ${LEAVE_TYPES.find(l => l.id === s.leave_type)?.border}`}>
+                                {React.createElement(LEAVE_TYPES.find(l => l.id === s.leave_type)?.icon || Info, { className: "w-3 h-3" })}
+                                {LEAVE_TYPES.find(l => l.id === s.leave_type)?.label}
+                              </div>
+                            ) : (
+                              <Badge variant="outline" className="text-zinc-500 border-zinc-800 font-black text-[10px] uppercase tracking-wider">Work</Badge>
+                            )}
+                            <span className="font-black text-orange-500 text-lg">{s.total_hours.toFixed(2)}h</span>
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-2 bg-black/50 p-3 rounded-lg border border-zinc-800/50">
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">In</span>
+                            <span className="font-mono text-sm text-zinc-300">{s.clock_in ? format(parseISO(s.clock_in), 'HH:mm') : '--:--'}</span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Out</span>
+                            <span className="font-mono text-sm text-zinc-300">{s.clock_out ? format(parseISO(s.clock_out), 'HH:mm') : '--:--'}</span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Tea</span>
+                            <span className="font-mono text-[10px] text-zinc-500">{s.tea_out ? `${format(parseISO(s.tea_out), 'HH:mm')} - ${s.tea_in ? format(parseISO(s.tea_in), 'HH:mm') : '...'}` : '--:--'}</span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Lunch</span>
+                            <span className="font-mono text-[10px] text-zinc-500">{s.lunch_out ? `${format(parseISO(s.lunch_out), 'HH:mm')} - ${s.lunch_in ? format(parseISO(s.lunch_in), 'HH:mm') : '...'}` : '--:--'}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex justify-end gap-2 pt-2 border-t border-zinc-800/50">
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="h-8 text-zinc-400 hover:text-orange-500 hover:bg-orange-500/10 rounded-lg text-[10px] font-bold uppercase tracking-widest" 
+                            onClick={() => {
+                              setEditingSession(s);
+                              setIsModalOpen(true);
+                            }}
+                          >
+                            <Edit2 className="w-3 h-3 mr-1.5" /> Edit
+                          </Button>
+                          <Dialog>
+                            <DialogTrigger asChild>
+                              <Button variant="ghost" size="sm" className="h-8 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded-lg text-[10px] font-bold uppercase tracking-widest">
+                                <Trash2 className="w-3 h-3 mr-1.5" /> Delete
+                              </Button>
+                            </DialogTrigger>
+                            <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
+                              <DialogHeader>
+                                <DialogTitle>Delete Entry</DialogTitle>
+                                <DialogDescription className="text-zinc-500">Are you sure you want to delete this session? This action cannot be undone.</DialogDescription>
+                              </DialogHeader>
+                              <DialogFooter>
+                                <DialogClose asChild>
+                                  <Button variant="outline" className="bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white">Cancel</Button>
+                                </DialogClose>
+                                <DialogClose asChild>
+                                  <Button variant="destructive" onClick={() => deleteSession(s.id)}>Delete</Button>
+                                </DialogClose>
+                              </DialogFooter>
+                            </DialogContent>
+                          </Dialog>
+                        </div>
+                      </div>
+                    </Card>
+                  ))}
+              </div>
               {sessions.filter(s => format(parseISO(s.date), 'yyyy-MM') === format(viewDate, 'yyyy-MM')).length === 0 && (
                 <div className="py-32 text-center">
                   <div className="w-16 h-16 bg-zinc-900 rounded-full flex items-center justify-center mx-auto mb-4 border border-zinc-800">
@@ -1000,12 +1002,12 @@ function ActionButton({ icon: Icon, label, active, onClick, variant }: any) {
     <button 
       onClick={onClick}
       disabled={!active}
-      className={`flex flex-col items-center justify-center gap-4 p-6 rounded-2xl border shadow-lg transition-all active:scale-95 disabled:opacity-20 disabled:grayscale disabled:pointer-events-none ${variants[variant] || variants.zinc}`}
+      className={`flex flex-col items-center justify-center gap-4 p-6 rounded-2xl border shadow-lg transition-all active:scale-95 disabled:opacity-50 disabled:grayscale-0 disabled:pointer-events-none ${variants[variant] || variants.zinc}`}
     >
       <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center shadow-inner">
         <Icon className="w-6 h-6" />
       </div>
-      <span className="text-[10px] font-black uppercase tracking-[0.2em]">{label}</span>
+      <span className="text-[10px] font-black uppercase tracking-[0.2em] text-center">{label}</span>
     </button>
   );
 }
@@ -1033,8 +1035,4 @@ function StatCard({ label, value, icon: Icon, description, trend, variant = 'def
       <div className="h-1.5 w-full bg-zinc-800 group-hover:bg-orange-500 transition-all duration-500" />
     </Card>
   );
-}
-
-function DialogTrigger({ children, asChild }: any) {
-  return children;
 }

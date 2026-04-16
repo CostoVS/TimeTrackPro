@@ -27,9 +27,14 @@ import {
   FileDown,
   Info,
   Eye,
-  EyeOff
+  EyeOff,
+  User,
+  CheckSquare,
+  StickyNote,
+  CalendarDays,
+  Quote
 } from 'lucide-react';
-import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isWithinInterval, differenceInSeconds } from 'date-fns';
+import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isWithinInterval, differenceInSeconds, getDayOfYear } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
 import { Toaster, toast } from 'sonner';
 import jsPDF from 'jspdf';
@@ -65,12 +70,44 @@ interface Session {
 }
 
 const LEAVE_TYPES = [
-  { id: 'sick_paid', label: 'Sick Leave (Paid)', icon: HeartPulse, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100' },
-  { id: 'sick_unpaid', label: 'Sick Leave (Unpaid)', icon: HeartPulse, color: 'text-zinc-600', bg: 'bg-zinc-50', border: 'border-zinc-100' },
-  { id: 'annual_paid', label: 'Annual Leave (Paid)', icon: Palmtree, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
-  { id: 'annual_unpaid', label: 'Annual Leave (Unpaid)', icon: Palmtree, color: 'text-zinc-600', bg: 'bg-zinc-50', border: 'border-zinc-100' },
-  { id: 'public_holiday', label: 'Public Holiday', icon: Home, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
+  { id: 'work_manual', label: 'Days Worked (Manual Hours)', icon: Briefcase, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100' },
+  { id: 'sick_paid', label: 'Sick Day (Paid)', icon: HeartPulse, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100' },
+  { id: 'sick_unpaid', label: 'Sick Day (Unpaid)', icon: HeartPulse, color: 'text-zinc-600', bg: 'bg-zinc-50', border: 'border-zinc-100' },
+  { id: 'annual_paid', label: 'Leave (Paid)', icon: Palmtree, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
+  { id: 'annual_unpaid', label: 'Unpaid Leave', icon: Palmtree, color: 'text-zinc-600', bg: 'bg-zinc-50', border: 'border-zinc-100' },
+  { id: 'public_holiday', label: 'Holiday', icon: Home, color: 'text-blue-600', bg: 'bg-blue-50', border: 'border-blue-100' },
   { id: 'day_off', label: 'Day Off', icon: Calendar, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-100' },
+];
+
+const SA_HOLIDAYS: Record<string, string> = {
+  '01-01': "New Year's Day",
+  '03-21': "Human Rights Day",
+  '04-27': "Freedom Day",
+  '05-01': "Workers' Day",
+  '06-16': "Youth Day",
+  '08-09': "National Women's Day",
+  '09-24': "Heritage Day",
+  '12-16': "Day of Reconciliation",
+  '12-25': "Christmas Day",
+  '12-26': "Day of Goodwill"
+};
+
+const MOTIVATIONS = [
+  { text: "The future depends on what you do today.", author: "Mahatma Gandhi" },
+  { text: "It always seems impossible until it's done.", author: "Nelson Mandela" },
+  { text: "Don't watch the clock; do what it does. Keep going.", author: "Sam Levenson" },
+  { text: "The only way to do great work is to love what you do.", author: "Steve Jobs" },
+  { text: "Success is not final, failure is not fatal: it is the courage to continue that counts.", author: "Winston Churchill" },
+  { text: "Believe you can and you're halfway there.", author: "Theodore Roosevelt" },
+  { text: "Act as if what you do makes a difference. It does.", author: "William James" },
+  { text: "Start where you are. Use what you have. Do what you can.", author: "Arthur Ashe" },
+  { text: "Fall seven times and stand up eight.", author: "Japanese Proverb" },
+  { text: "Everything you’ve ever wanted is on the other side of fear.", author: "George Addair" },
+  { text: "Hardships often prepare ordinary people for an extraordinary destiny.", author: "C.S. Lewis" },
+  { text: "Dream big and dare to fail.", author: "Norman Vaughan" },
+  { text: "What you get by achieving your goals is not as important as what you become by achieving your goals.", author: "Zig Ziglar" },
+  { text: "The harder you work for something, the greater you'll feel when you achieve it.", author: "Unknown" },
+  { text: "Don't stop when you're tired. Stop when you're done.", author: "David Goggins" }
 ];
 
 export default function App() {
@@ -82,9 +119,28 @@ export default function App() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingSession, setEditingSession] = useState<Partial<Session> | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [viewMode, setViewMode] = useState<'dashboard' | 'history'>('dashboard');
+  const [viewMode, setViewMode] = useState<'dashboard' | 'history' | 'profile'>('dashboard');
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportTimeframe, setExportTimeframe] = useState<'day' | 'week' | 'month'>('month');
+
+  const [notes, setNotes] = useState(() => localStorage.getItem('nic_notes') || '');
+  const [todos, setTodos] = useState<{id: string, text: string, done: boolean}[]>(() => {
+    const saved = localStorage.getItem('nic_todos');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [profile, setProfile] = useState<{name: string, empNumber: string, details: string}>(() => {
+    const saved = localStorage.getItem('nic_profile');
+    return saved ? JSON.parse(saved) : { name: '', empNumber: '', details: '' };
+  });
+
+  const dailyMotivation = useMemo(() => {
+    const day = getDayOfYear(new Date());
+    return MOTIVATIONS[day % MOTIVATIONS.length];
+  }, []);
+
+  useEffect(() => { localStorage.setItem('nic_notes', notes); }, [notes]);
+  useEffect(() => { localStorage.setItem('nic_todos', JSON.stringify(todos)); }, [todos]);
+  useEffect(() => { localStorage.setItem('nic_profile', JSON.stringify(profile)); }, [profile]);
 
   const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('nic_token');
@@ -219,16 +275,17 @@ export default function App() {
     return {
       monthTotal: monthSessions.reduce((acc, s) => acc + s.total_hours, 0),
       weekTotal: weekSessions.reduce((acc, s) => acc + s.total_hours, 0),
-      leaveDays: sessions.filter(s => s.leave_type && s.leave_type !== 'public_holiday').length,
+      leaveDays: sessions.filter(s => s.leave_type && s.leave_type !== 'public_holiday' && s.leave_type !== 'work_manual').length,
     };
   }, [sessions, viewDate]);
 
   if (!isAuthenticated) {
     return (
-      <>
+      <div className="relative">
+        <div className="shine-overlay"></div>
         <Toaster position="top-center" richColors />
         <Login onLogin={() => setIsAuthenticated(true)} />
-      </>
+      </div>
     );
   }
 
@@ -331,6 +388,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-black">
+      <div className="shine-overlay"></div>
       <Toaster position="top-center" richColors />
       
       {/* Navigation */}
@@ -366,6 +424,15 @@ export default function App() {
                 <History className="w-4 h-4" />
                 History
               </Button>
+              <Button 
+                variant={viewMode === 'profile' ? 'secondary' : 'ghost'} 
+                size="sm" 
+                onClick={() => setViewMode('profile')}
+                className={`gap-2 rounded-lg px-4 font-bold uppercase text-[10px] tracking-widest ${viewMode === 'profile' ? 'bg-orange-500 text-white' : 'text-zinc-500 hover:text-white'}`}
+              >
+                <User className="w-4 h-4" />
+                Dossier
+              </Button>
             </div>
 
             <div className="flex items-center gap-3">
@@ -376,14 +443,14 @@ export default function App() {
                   setEditingSession({ date: format(new Date(), 'yyyy-MM-dd'), is_paid: 1, leave_hours: 8 });
                   setIsModalOpen(true);
                 }}
-                className="hidden sm:flex gap-2 bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl font-bold uppercase text-[10px] tracking-widest h-10 px-5"
+                className="flex items-center gap-2 bg-zinc-900 border-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-xl font-bold uppercase text-[10px] tracking-widest h-10 px-3 sm:px-5"
               >
                 <Plus className="w-4 h-4" />
-                Add Entry
+                <span className="hidden sm:inline">Add Entry</span>
               </Button>
-              <Button size="sm" onClick={() => setExportModalOpen(true)} className="gap-2 bg-white text-zinc-950 hover:bg-zinc-200 rounded-xl font-bold uppercase text-[10px] tracking-widest h-10 px-5">
+              <Button size="sm" onClick={() => setExportModalOpen(true)} className="flex items-center gap-2 bg-white text-zinc-950 hover:bg-zinc-200 rounded-xl font-bold uppercase text-[10px] tracking-widest h-10 px-3 sm:px-5">
                 <FileDown className="w-4 h-4" />
-                Export
+                <span className="hidden sm:inline">Export</span>
               </Button>
               <Button variant="ghost" size="icon" onClick={handleLogout} className="text-zinc-500 hover:text-orange-500 h-10 w-10">
                 <LogOut className="w-5 h-5" />
@@ -393,9 +460,24 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 relative z-10">
         {viewMode === 'dashboard' ? (
           <>
+            {/* Motivation Banner */}
+            <motion.div 
+              initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
+              className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 flex flex-col md:flex-row items-center gap-6 shadow-xl orange-glow relative overflow-hidden"
+            >
+              <div className="absolute top-0 right-0 w-64 h-64 bg-orange-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2" />
+              <div className="w-12 h-12 bg-black border border-zinc-800 rounded-xl flex items-center justify-center shrink-0 z-10 shadow-lg">
+                <Quote className="w-5 h-5 text-orange-500" />
+              </div>
+              <div className="flex-1 text-center md:text-left z-10">
+                <p className="text-zinc-300 font-medium italic text-lg leading-relaxed">"{dailyMotivation.text}"</p>
+                <p className="text-orange-500 font-bold uppercase tracking-widest text-[10px] mt-2">— {dailyMotivation.author}</p>
+              </div>
+            </motion.div>
+
             {/* Hero Section */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               {/* Clock Card */}
@@ -561,7 +643,7 @@ export default function App() {
               </CardContent>
             </Card>
           </>
-        ) : (
+        ) : viewMode === 'history' ? (
           /* Full History View */
           <div>
             <Button variant="ghost" size="sm" onClick={() => setViewMode('dashboard')} className="text-zinc-400 hover:text-white mb-4 pl-0 flex items-center gap-2 text-[10px] uppercase font-bold tracking-widest transition-colors mb-6">
@@ -674,7 +756,154 @@ export default function App() {
             </CardContent>
           </Card>
           </div>
-        )}
+        ) : viewMode === 'profile' ? (
+          /* Profile & Tasks View */
+          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            {/* Header */}
+            <div>
+              <h2 className="text-2xl font-black text-white uppercase tracking-tight">Dossier / Dashboard</h2>
+              <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-1">Manage your identity, tasks, and notes</p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Profile Details */}
+              <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-xl shadow-black/20 orange-glow">
+                <CardHeader className="border-b border-zinc-800/50 pb-6">
+                  <div className="flex items-center gap-3">
+                    <User className="w-5 h-5 text-orange-500" />
+                    <CardTitle className="text-lg font-black text-white uppercase tracking-tight">Profile Details</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6 space-y-4">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Full Name</Label>
+                    <Input 
+                      value={profile.name}
+                      onChange={e => setProfile(p => ({ ...p, name: e.target.value }))}
+                      placeholder="Your Name"
+                      className="bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl max-w-sm"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Employee No.</Label>
+                    <Input 
+                      value={profile.empNumber}
+                      onChange={e => setProfile(p => ({ ...p, empNumber: e.target.value }))}
+                      placeholder="EMP000"
+                      className="bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl max-w-sm"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Other Details</Label>
+                    <textarea 
+                      value={profile.details}
+                      onChange={e => setProfile(p => ({ ...p, details: e.target.value }))}
+                      placeholder="Department, Role, Direct Manager..."
+                      className="w-full h-24 p-4 bg-black border border-zinc-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm text-white" 
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Todos */}
+              <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-xl shadow-black/20 orange-glow">
+                <CardHeader className="border-b border-zinc-800/50 pb-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <CheckSquare className="w-5 h-5 text-orange-500" />
+                      <CardTitle className="text-lg font-black text-white uppercase tracking-tight">Tasks</CardTitle>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setTodos([{ id: crypto.randomUUID(), text: '', done: false }, ...todos])}
+                      className="text-orange-500 hover:text-white hover:bg-orange-500/20 text-[10px] font-bold uppercase tracking-widest"
+                    >
+                      <Plus className="w-4 h-4 mr-1" /> Add Task
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-6">
+                  <div className="space-y-3">
+                    {todos.map(t => (
+                      <div key={t.id} className="flex flex-col gap-2 p-3 bg-black border border-zinc-800 rounded-xl group/todo relative transition-colors focus-within:border-orange-500/50">
+                        <div className="flex items-center gap-3">
+                          <Checkbox 
+                            checked={t.done}
+                            onCheckedChange={c => {
+                              setTodos(todos.map(td => td.id === t.id ? { ...td, done: !!c } : td));
+                            }}
+                            className="border-zinc-700 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
+                          />
+                          <Input 
+                            value={t.text}
+                            onChange={e => setTodos(todos.map(td => td.id === t.id ? { ...td, text: e.target.value } : td))}
+                            className={`h-8 bg-transparent border-0 px-2 ring-0 focus-visible:ring-0 ${t.done ? 'text-zinc-600 line-through' : 'text-white'}`}
+                            placeholder="Type a task..."
+                          />
+                          <Button 
+                            variant="ghost" 
+                            size="icon" 
+                            className="w-8 h-8 opacity-0 group-hover/todo:opacity-100 text-zinc-600 hover:text-red-500 transition-opacity"
+                            onClick={() => setTodos(todos.filter(td => td.id !== t.id))}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                    {todos.length === 0 && (
+                      <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest text-center py-6">No pending tasks</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Notes */}
+              <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-xl shadow-black/20 orange-glow">
+                <CardHeader className="border-b border-zinc-800/50 pb-6">
+                  <div className="flex items-center gap-3">
+                    <StickyNote className="w-5 h-5 text-orange-500" />
+                    <CardTitle className="text-lg font-black text-white uppercase tracking-tight">Personal Notes</CardTitle>
+                  </div>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <textarea 
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Scratchpad for random thoughts..."
+                    className="w-full h-48 p-6 bg-transparent border-none rounded-b-xl focus:outline-none focus:ring-0 text-sm text-white resize-none" 
+                  />
+                </CardContent>
+              </Card>
+
+              {/* SA Mini Calendar */}
+              <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-xl shadow-black/20 orange-glow">
+                <CardHeader className="border-b border-zinc-800/50 pb-6">
+                  <div className="flex items-center gap-3">
+                    <CalendarDays className="w-5 h-5 text-orange-500" />
+                    <CardTitle className="text-lg font-black text-white uppercase tracking-tight">South African Calendar</CardTitle>
+                  </div>
+                  <CardDescription className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 mt-2">Public Holidays Summary</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div className="max-h-56 overflow-y-auto w-full">
+                    <Table>
+                      <TableBody>
+                        {Object.entries(SA_HOLIDAYS).map(([dateStr, name]) => (
+                          <TableRow key={dateStr} className="border-zinc-800/50 hover:bg-zinc-800/30">
+                            <TableCell className="font-mono text-xs text-zinc-400 py-3">{dateStr}</TableCell>
+                            <TableCell className="font-bold text-zinc-200 py-3">{name}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        ) : null}
       </main>
 
       {/* Export Modal */}

@@ -32,18 +32,20 @@ async function startServer() {
     const normalizedUsername = username.toLowerCase().trim();
     const normalizedPassword = password.trim();
 
-    console.log(`[LOGIN] Attempt - User: "${normalizedUsername}" (len: ${normalizedUsername.length}), Pass: "${normalizedPassword}" (len: ${normalizedPassword.length})`);
+    console.log(`[LOGIN] Attempt - User: "${normalizedUsername}", Pass: "${normalizedPassword}"`);
 
-    // Accept both the original password and a simpler one for testing
-    const isValid = (normalizedUsername === 'admin') && 
-                    (normalizedPassword === 'Nic6604211989!' || normalizedPassword === 'admin' || normalizedPassword === '1234');
+    // Extremely robust comparison
+    const isUserAdmin = normalizedUsername === 'admin';
+    const isPassCorrect = normalizedPassword === 'Nic6604211989!' || 
+                          normalizedPassword === 'admin' || 
+                          normalizedPassword === '1234';
 
-    if (isValid) {
+    if (isUserAdmin && isPassCorrect) {
       console.log('[LOGIN] Success');
       return res.json({ token: 'secret-token-nic-2026' });
     } else {
-      console.log('[LOGIN] Failed: Invalid credentials');
-      return res.status(401).json({ error: 'Invalid credentials' });
+      console.log(`[LOGIN] Failed - User match: ${isUserAdmin}, Pass match: ${isPassCorrect}`);
+      return res.status(401).json({ error: 'Invalid username or password' });
     }
   });
 
@@ -189,9 +191,11 @@ async function startServer() {
   });
 
   router.post('/sessions/action', async (req, res) => {
-    const { action, timestamp } = req.body;
-    const today = new Date().toISOString().split('T')[0];
+    const { action, timestamp, clientDate } = req.body;
+    const today = clientDate || new Date().toISOString().split('T')[0];
     const ts = timestamp || new Date().toISOString();
+
+    console.log(`[ACTION] ${action} on ${today} at ${ts}`);
 
     let session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
 
@@ -201,18 +205,31 @@ async function startServer() {
       } else {
         await db.run('INSERT INTO sessions (date, clock_in, status) VALUES (?, ?, ?)', [today, ts, 'working']);
       }
+    } else if (action === 'clock_out') {
+      if (session) {
+        await db.run('UPDATE sessions SET clock_out = ?, status = ? WHERE id = ?', [ts, 'idle', session.id]);
+      }
     } else {
       if (!session) {
+        // Create session if it doesn't exist (e.g. forgot to clock in)
         await db.run(`INSERT INTO sessions (date, ${action}, status) VALUES (?, ?, ?)`, [today, ts, getStatusForAction(action)]);
       } else {
         await db.run(`UPDATE sessions SET ${action} = ?, status = ? WHERE id = ?`, [ts, getStatusForAction(action), session.id]);
       }
     }
 
+    // Refresh session to calculate hours
     const currentSession = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
     if (currentSession) {
       const total = calculateHours(currentSession);
       await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, currentSession.id]);
+    } else {
+      // If we just clocked out, update the session we just closed
+      const lastSession = await db.get('SELECT * FROM sessions WHERE date = ? ORDER BY id DESC LIMIT 1', [today]);
+      if (lastSession) {
+        const total = calculateHours(lastSession);
+        await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, lastSession.id]);
+      }
     }
 
     const updated = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);

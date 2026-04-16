@@ -194,6 +194,31 @@ export default function App() {
 
   console.log('[APP] Render - isAuthenticated:', isAuthenticated);
 
+  const stats = useMemo(() => {
+    const now = new Date();
+    const monthSessions = sessions.filter(s => {
+      try {
+        return format(parseISO(s.date), 'yyyy-MM') === format(viewDate, 'yyyy-MM');
+      } catch (e) {
+        return false;
+      }
+    });
+    const weekSessions = sessions.filter(s => {
+      try {
+        const d = parseISO(s.date);
+        return isWithinInterval(d, { start: startOfWeek(now), end: endOfWeek(now) });
+      } catch (e) {
+        return false;
+      }
+    });
+
+    return {
+      monthTotal: monthSessions.reduce((acc, s) => acc + s.total_hours, 0),
+      weekTotal: weekSessions.reduce((acc, s) => acc + s.total_hours, 0),
+      leaveDays: sessions.filter(s => s.leave_type && s.leave_type !== 'public_holiday').length,
+    };
+  }, [sessions, viewDate]);
+
   if (!isAuthenticated) {
     return (
       <>
@@ -259,21 +284,6 @@ export default function App() {
 
     doc.save(`timesheet-${format(viewDate, 'yyyy-MM')}.pdf`);
   };
-
-  const stats = useMemo(() => {
-    const now = new Date();
-    const monthSessions = sessions.filter(s => format(parseISO(s.date), 'yyyy-MM') === format(viewDate, 'yyyy-MM'));
-    const weekSessions = sessions.filter(s => {
-      const d = parseISO(s.date);
-      return isWithinInterval(d, { start: startOfWeek(now), end: endOfWeek(now) });
-    });
-
-    return {
-      monthTotal: monthSessions.reduce((acc, s) => acc + s.total_hours, 0),
-      weekTotal: weekSessions.reduce((acc, s) => acc + s.total_hours, 0),
-      leaveDays: sessions.filter(s => s.leave_type && s.leave_type !== 'public_holiday').length,
-    };
-  }, [sessions, viewDate]);
 
   const calculateLiveDuration = () => {
     if (!currentSession?.clock_in) return '00:00:00';

@@ -435,7 +435,7 @@ export default function App() {
               </Button>
             </div>
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2 sm:gap-3">
               <Button 
                 variant="outline" 
                 size="sm" 
@@ -460,7 +460,35 @@ export default function App() {
         </div>
       </nav>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 relative z-10">
+      {/* Mobile Bottom Navigation */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md border-t border-zinc-800 px-4 py-3 flex justify-between items-center pb-safe">
+        <Button 
+          variant={viewMode === 'dashboard' ? 'secondary' : 'ghost'} 
+          onClick={() => setViewMode('dashboard')}
+          className={`flex-col h-auto py-2 gap-1 rounded-xl w-[30%] ${viewMode === 'dashboard' ? 'bg-orange-500/10 text-orange-500' : 'text-zinc-500 hover:text-white'}`}
+        >
+          <LayoutDashboard className="w-5 h-5" />
+          <span className="text-[9px] font-black uppercase tracking-widest">Dash</span>
+        </Button>
+        <Button 
+          variant={viewMode === 'history' ? 'secondary' : 'ghost'} 
+          onClick={() => setViewMode('history')}
+          className={`flex-col h-auto py-2 gap-1 rounded-xl w-[30%] ${viewMode === 'history' ? 'bg-orange-500/10 text-orange-500' : 'text-zinc-500 hover:text-white'}`}
+        >
+          <History className="w-5 h-5" />
+          <span className="text-[9px] font-black uppercase tracking-widest">Log</span>
+        </Button>
+        <Button 
+          variant={viewMode === 'profile' ? 'secondary' : 'ghost'} 
+          onClick={() => setViewMode('profile')}
+          className={`flex-col h-auto py-2 gap-1 rounded-xl w-[30%] ${viewMode === 'profile' ? 'bg-orange-500/10 text-orange-500' : 'text-zinc-500 hover:text-white'}`}
+        >
+          <User className="w-5 h-5" />
+          <span className="text-[9px] font-black uppercase tracking-widest">Dossier</span>
+        </Button>
+      </div>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 relative z-10 mb-20 md:mb-8">
         {viewMode === 'dashboard' ? (
           <>
             {/* Motivation Banner */}
@@ -502,7 +530,9 @@ export default function App() {
                       <span className="text-5xl font-black font-mono tracking-tighter text-white relative">
                         {calculateLiveDuration()}
                       </span>
-                      <span className="text-[10px] font-bold text-zinc-500 mt-2 tracking-widest relative">{format(currentTime, 'HH:mm:ss')}</span>
+                      <span className="text-[10px] font-bold text-zinc-500 mt-2 tracking-widest relative">
+                        SAST: {new Date(currentTime.toLocaleString('en-US', { timeZone: 'Africa/Johannesburg' })).toLocaleTimeString('en-US', { hour12: false })}
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 w-full max-w-md">
@@ -963,25 +993,25 @@ export default function App() {
 
       {/* Entry Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="sm:max-w-[550px] p-0 overflow-hidden border-none shadow-2xl orange-glow">
-          <DialogHeader className="bg-black text-white p-10 border-b border-zinc-800">
+        <DialogContent className="w-[95vw] sm:max-w-[550px] p-0 overflow-y-auto max-h-[90vh] border-none shadow-2xl orange-glow rounded-2xl">
+          <DialogHeader className="bg-black text-white p-6 sm:p-10 border-b border-zinc-800">
             <div className="flex items-center gap-4 mb-2">
-              <div className="w-12 h-12 bg-orange-500 text-white rounded-xl flex items-center justify-center shadow-xl shadow-orange-500/20">
+              <div className="w-12 h-12 bg-orange-500 text-white rounded-xl flex items-center justify-center shrink-0 shadow-xl shadow-orange-500/20">
                 {editingSession?.id ? <Edit2 className="w-5 h-5" /> : <Plus className="w-5 h-5" />}
               </div>
-              <div>
-                <DialogTitle className="text-3xl font-black tracking-tighter uppercase">
+              <div className="min-w-0">
+                <DialogTitle className="text-2xl sm:text-3xl font-black tracking-tighter uppercase truncate">
                   {editingSession?.id ? 'Edit Entry' : 'Manual Entry'}
                 </DialogTitle>
-                <DialogDescription className="text-zinc-500 mt-1 font-bold uppercase tracking-widest text-[10px]">
+                <DialogDescription className="text-zinc-500 mt-1 font-bold uppercase tracking-widest text-[10px] truncate">
                   {editingSession?.id ? 'Update session details' : 'Add a new session manually'}
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
-          <form onSubmit={saveSession} className="p-10 space-y-8 bg-zinc-900">
-            <div className="grid grid-cols-2 gap-8">
+          <form onSubmit={saveSession} className="p-6 sm:p-10 space-y-6 bg-zinc-900">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div className="space-y-3">
                 <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Date</Label>
                 <Input 
@@ -989,7 +1019,7 @@ export default function App() {
                   required
                   value={editingSession?.date || ''}
                   onChange={e => setEditingSession({ ...editingSession, date: e.target.value })}
-                  className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 focus:border-orange-500 rounded-xl"
+                  className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 focus:border-orange-500 rounded-xl w-full"
                 />
               </div>
               <div className="space-y-3">
@@ -998,10 +1028,10 @@ export default function App() {
                   value={editingSession?.leave_type || 'work'} 
                   onValueChange={v => setEditingSession({ ...editingSession, leave_type: v === 'work' ? null : v })}
                 >
-                  <SelectTrigger className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl">
-                    <SelectValue placeholder="Select type" />
+                  <SelectTrigger className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl w-full">
+                    <SelectValue placeholder="Select type" className="truncate" />
                   </SelectTrigger>
-                  <SelectContent className="bg-zinc-900 border-zinc-800 text-white">
+                  <SelectContent className="bg-zinc-900 border-zinc-800 text-white max-h-[40vh] overflow-y-auto">
                     <SelectItem value="work">Regular Work Day</SelectItem>
                     {LEAVE_TYPES.map(l => (
                       <SelectItem key={l.id} value={l.id}>{l.label}</SelectItem>
@@ -1015,33 +1045,33 @@ export default function App() {
               <motion.div 
                 initial={{ opacity: 0, y: -10 }} 
                 animate={{ opacity: 1, y: 0 }}
-                className="grid grid-cols-2 gap-8 p-6 bg-black rounded-xl border border-zinc-800"
+                className="grid grid-cols-1 sm:grid-cols-2 gap-6 p-6 bg-black rounded-xl border border-zinc-800"
               >
                 <div className="space-y-3">
-                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Leave Hours</Label>
+                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Leave / Manual Hours</Label>
                   <Input 
                     type="number" 
                     step="0.5"
                     value={editingSession?.leave_hours || 0}
                     onChange={e => setEditingSession({ ...editingSession, leave_hours: parseFloat(e.target.value) })}
-                    className="h-14 bg-zinc-900 border-zinc-800 text-white focus:ring-orange-500 rounded-xl" 
+                    className="h-14 bg-zinc-900 border-zinc-800 text-white focus:ring-orange-500 rounded-xl w-full" 
                   />
                 </div>
                 <div className="space-y-3">
                   <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Payment Status</Label>
-                  <div className="flex items-center gap-3 h-14">
+                  <div className="flex items-center gap-3 h-14 bg-zinc-900 rounded-xl px-4 border border-zinc-800">
                     <Checkbox 
                       id="is_paid" 
                       checked={!!editingSession?.is_paid}
                       onCheckedChange={c => setEditingSession({ ...editingSession, is_paid: c ? 1 : 0 })}
                       className="border-zinc-700 data-[state=checked]:bg-orange-500 data-[state=checked]:border-orange-500"
                     />
-                    <label htmlFor="is_paid" className="text-sm font-bold text-zinc-400 cursor-pointer uppercase tracking-widest">Paid Leave</label>
+                    <label htmlFor="is_paid" className="text-sm font-bold text-zinc-400 cursor-pointer uppercase tracking-widest shrink-0">Paid Leave</label>
                   </div>
                 </div>
               </motion.div>
             ) : (
-              <div className="grid grid-cols-2 gap-8">
+              <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-3">
                   <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Clock In</Label>
                   <Input 
@@ -1051,7 +1081,7 @@ export default function App() {
                       const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                       setEditingSession({ ...editingSession, clock_in: `${date}T${e.target.value}:00` });
                     }}
-                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl" 
+                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl w-full" 
                   />
                 </div>
                 <div className="space-y-3">
@@ -1063,7 +1093,7 @@ export default function App() {
                       const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                       setEditingSession({ ...editingSession, clock_out: `${date}T${e.target.value}:00` });
                     }}
-                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl" 
+                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl w-full" 
                   />
                 </div>
               </div>
@@ -1079,11 +1109,11 @@ export default function App() {
               />
             </div>
 
-            <div className="flex gap-4 pt-4">
-              <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="flex-1 h-14 rounded-xl text-zinc-500 hover:text-white hover:bg-zinc-800 font-bold uppercase tracking-widest">Cancel</Button>
-              <Button type="submit" className="flex-1 h-14 rounded-xl bg-orange-500 text-white hover:bg-orange-600 gap-2 font-black uppercase tracking-widest shadow-xl shadow-orange-500/20">
-                <Save className="w-5 h-5" />
-                Save Entry
+            <div className="flex gap-4 pt-2">
+              <Button type="button" variant="ghost" onClick={() => setIsModalOpen(false)} className="flex-1 h-14 rounded-xl text-zinc-500 hover:text-white hover:bg-zinc-800 font-bold uppercase tracking-widest shrink-0">Cancel</Button>
+              <Button type="submit" className="flex-1 h-14 rounded-xl bg-orange-500 text-white hover:bg-orange-600 gap-2 font-black uppercase tracking-widest shadow-xl shadow-orange-500/20 shrink-0">
+                <Save className="w-5 h-5 hidden sm:inline" />
+                Save
               </Button>
             </div>
           </form>

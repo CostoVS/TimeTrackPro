@@ -83,6 +83,8 @@ export default function App() {
   const [editingSession, setEditingSession] = useState<Partial<Session> | null>(null);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [viewMode, setViewMode] = useState<'dashboard' | 'history'>('dashboard');
+  const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [exportTimeframe, setExportTimeframe] = useState<'day' | 'week' | 'month'>('month');
 
   const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('nic_token');
@@ -230,9 +232,32 @@ export default function App() {
     );
   }
 
-  const exportPDF = () => {
+  const exportPDF = (timeframe: 'day' | 'week' | 'month') => {
     const doc = new jsPDF();
-    const monthName = format(viewDate, 'MMMM yyyy');
+    const now = new Date();
+    let titleStr = '';
+    let filteredSessions = [];
+
+    if (timeframe === 'day') {
+      titleStr = format(now, 'dd MMMM yyyy');
+      filteredSessions = sessions.filter(s => format(parseISO(s.date), 'yyyy-MM-dd') === format(now, 'yyyy-MM-dd'));
+    } else if (timeframe === 'week') {
+      titleStr = `Week of ${format(startOfWeek(now), 'dd MMM')} - ${format(endOfWeek(now), 'dd MMM yyyy')}`;
+      filteredSessions = sessions.filter(s => {
+        try {
+          return isWithinInterval(parseISO(s.date), { start: startOfWeek(now), end: endOfWeek(now) });
+        } catch { return false; }
+      });
+    } else {
+      titleStr = format(viewDate, 'MMMM yyyy');
+      filteredSessions = sessions.filter(s => {
+        try {
+          return format(parseISO(s.date), 'yyyy-MM') === format(viewDate, 'yyyy-MM');
+        } catch { return false; }
+      });
+    }
+
+    filteredSessions = filteredSessions.sort((a, b) => a.date.localeCompare(b.date));
     
     doc.setFontSize(22);
     doc.setTextColor(24, 24, 27);
@@ -240,14 +265,10 @@ export default function App() {
     
     doc.setFontSize(10);
     doc.setTextColor(113, 113, 122);
-    doc.text(`Period: ${monthName}`, 14, 30);
+    doc.text(`Period: ${titleStr}`, 14, 30);
     doc.text(`Generated: ${format(new Date(), 'dd MMM yyyy HH:mm')}`, 14, 35);
-    
-    const monthSessions = sessions.filter(s => 
-      format(parseISO(s.date), 'yyyy-MM') === format(viewDate, 'yyyy-MM')
-    ).sort((a, b) => a.date.localeCompare(b.date));
 
-    const tableData = monthSessions.map(s => [
+    const tableData = filteredSessions.map(s => [
       format(parseISO(s.date), 'dd MMM (EEE)'),
       s.leave_type ? LEAVE_TYPES.find(l => l.id === s.leave_type)?.label : 'Work',
       s.clock_in ? format(parseISO(s.clock_in), 'HH:mm') : '-',
@@ -277,14 +298,16 @@ export default function App() {
       }
     });
 
-    const total = monthSessions.reduce((acc, s) => acc + s.total_hours, 0);
+    const total = filteredSessions.reduce((acc, s) => acc + s.total_hours, 0);
     const finalY = (doc as any).lastAutoTable.finalY + 15;
     
     doc.setFontSize(12);
     doc.setTextColor(24, 24, 27);
-    doc.text(`Total Monthly Hours: ${total.toFixed(2)}h`, 14, finalY);
+    doc.text(`Total Hours: ${total.toFixed(2)}h`, 14, finalY);
 
-    doc.save(`timesheet-${format(viewDate, 'yyyy-MM')}.pdf`);
+    const filename = timeframe === 'day' ? format(now, 'yyyy-MM-dd') : timeframe === 'week' ? `week-${format(startOfWeek(now), 'yyyy-MM-dd')}` : format(viewDate, 'yyyy-MM');
+    doc.save(`timesheet-${filename}.pdf`);
+    setExportModalOpen(false);
   };
 
   const calculateLiveDuration = () => {
@@ -358,7 +381,7 @@ export default function App() {
                 <Plus className="w-4 h-4" />
                 Add Entry
               </Button>
-              <Button size="sm" onClick={exportPDF} className="gap-2 bg-white text-zinc-950 hover:bg-zinc-200 rounded-xl font-bold uppercase text-[10px] tracking-widest h-10 px-5">
+              <Button size="sm" onClick={() => setExportModalOpen(true)} className="gap-2 bg-white text-zinc-950 hover:bg-zinc-200 rounded-xl font-bold uppercase text-[10px] tracking-widest h-10 px-5">
                 <FileDown className="w-4 h-4" />
                 Export
               </Button>
@@ -494,43 +517,58 @@ export default function App() {
                 </Button>
               </CardHeader>
               <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
-                    <TableRow className="bg-zinc-950/50 border-zinc-800 hover:bg-zinc-950/50">
-                      <TableHead className="w-[150px] text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Date</TableHead>
-                      <TableHead className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Type</TableHead>
-                      <TableHead className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Clock In</TableHead>
-                      <TableHead className="text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Clock Out</TableHead>
-                      <TableHead className="text-right text-zinc-500 font-bold uppercase text-[10px] tracking-widest">Total</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {sessions.slice(0, 5).map((s) => (
-                      <TableRow key={s.id} className="group border-zinc-800 hover:bg-zinc-800/30 transition-colors">
-                        <TableCell className="font-bold text-zinc-300">{format(parseISO(s.date), 'dd MMM yyyy')}</TableCell>
-                        <TableCell>
-                          {s.leave_type ? (
-                            <Badge variant="secondary" className={`${LEAVE_TYPES.find(l => l.id === s.leave_type)?.bg} ${LEAVE_TYPES.find(l => l.id === s.leave_type)?.color} border-none text-[10px] font-black`}>
-                              {LEAVE_TYPES.find(l => l.id === s.leave_type)?.label}
-                            </Badge>
-                          ) : (
-                            <Badge variant="outline" className="text-zinc-500 border-zinc-800 text-[10px] font-bold uppercase tracking-wider">Work Day</Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="font-mono text-xs text-zinc-400">{s.clock_in ? format(parseISO(s.clock_in), 'HH:mm') : '-'}</TableCell>
-                        <TableCell className="font-mono text-xs text-zinc-400">{s.clock_out ? format(parseISO(s.clock_out), 'HH:mm') : '-'}</TableCell>
-                        <TableCell className="text-right font-black text-white">{s.total_hours.toFixed(2)}h</TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <div className="divide-y divide-zinc-800/50">
+                  {sessions.slice(0, 5).map((s) => (
+                    <div key={s.id} className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-zinc-800/30 transition-colors group">
+                      <div className="flex items-center gap-4">
+                        <div className="flex flex-col">
+                          <span className="font-bold text-white text-sm">{format(parseISO(s.date), 'dd MMM yyyy')}</span>
+                          <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">{format(parseISO(s.date), 'EEEE')}</span>
+                        </div>
+                        {s.leave_type ? (
+                          <Badge variant="secondary" className={`${LEAVE_TYPES.find(l => l.id === s.leave_type)?.bg} ${LEAVE_TYPES.find(l => l.id === s.leave_type)?.color} border-none text-[10px] font-black uppercase tracking-wider`}>
+                            {LEAVE_TYPES.find(l => l.id === s.leave_type)?.label}
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-zinc-500 border-zinc-700 text-[10px] font-bold uppercase tracking-wider">Work Day</Badge>
+                        )}
+                      </div>
+                      
+                      <div className="flex flex-wrap sm:flex-nowrap items-center gap-6 justify-between sm:justify-end border-t border-zinc-800/50 sm:border-0 pt-3 sm:pt-0">
+                        <div className="flex items-center gap-4">
+                          <div className="flex flex-col">
+                            <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">In</span>
+                            <span className="font-mono text-xs text-zinc-300">{s.clock_in ? format(parseISO(s.clock_in), 'HH:mm') : '--:--'}</span>
+                          </div>
+                          <div className="flex flex-col">
+                            <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">Out</span>
+                            <span className="font-mono text-xs text-zinc-300">{s.clock_out ? format(parseISO(s.clock_out), 'HH:mm') : '--:--'}</span>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end sm:pl-4">
+                          <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">Total</span>
+                          <span className="font-black text-orange-500">{s.total_hours.toFixed(2)}h</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {sessions.length === 0 && (
+                    <div className="p-8 text-center text-zinc-500 text-xs font-bold uppercase tracking-widest">
+                      No recent activity
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           </>
         ) : (
           /* Full History View */
-          <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-2xl shadow-black/50 overflow-hidden orange-glow">
-            <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
+          <div>
+            <Button variant="ghost" size="sm" onClick={() => setViewMode('dashboard')} className="text-zinc-400 hover:text-white mb-4 pl-0 flex items-center gap-2 text-[10px] uppercase font-bold tracking-widest transition-colors mb-6">
+              <ChevronLeft className="w-4 h-4"/> Back to Dashboard
+            </Button>
+            <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-2xl shadow-black/50 overflow-hidden orange-glow">
+              <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-zinc-800 pb-6">
               <div>
                 <CardTitle className="text-2xl font-black tracking-tighter text-white uppercase">Attendance History</CardTitle>
                 <CardDescription className="text-zinc-500 font-bold uppercase tracking-widest text-[10px]">Detailed logs of your work and leave sessions</CardDescription>
@@ -635,8 +673,64 @@ export default function App() {
               )}
             </CardContent>
           </Card>
+          </div>
         )}
       </main>
+
+      {/* Export Modal */}
+      <Dialog open={exportModalOpen} onOpenChange={setExportModalOpen}>
+        <DialogContent className="sm:max-w-[425px] p-0 overflow-hidden border-zinc-800 bg-zinc-900 text-white shadow-2xl orange-glow">
+          <DialogHeader className="bg-black p-6 border-b border-zinc-800">
+            <DialogTitle className="text-xl font-black uppercase tracking-widest">Export Report</DialogTitle>
+            <DialogDescription className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-1">
+              Select the timeframe to download your generated timesheet.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-6 space-y-4">
+            <div className="grid grid-cols-1 gap-2">
+              <Button 
+                variant="outline" 
+                className="h-14 bg-zinc-950 border-zinc-800 justify-start hover:bg-orange-500 hover:text-white"
+                onClick={() => exportPDF('day')}
+              >
+                <div className="flex flex-col items-start ml-2 text-left">
+                  <span className="font-black uppercase">Today</span>
+                  <span className="text-[10px] text-zinc-500 opacity-80">{format(new Date(), 'dd MMM yyyy')}</span>
+                </div>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-14 bg-zinc-950 border-zinc-800 justify-start hover:bg-orange-500 hover:text-white"
+                onClick={() => exportPDF('week')}
+              >
+                <div className="flex flex-col items-start ml-2 text-left">
+                  <span className="font-black uppercase">This Week</span>
+                  <span className="text-[10px] text-zinc-500 opacity-80">
+                    {format(startOfWeek(new Date()), 'dd MMM')} - {format(endOfWeek(new Date()), 'dd MMM')}
+                  </span>
+                </div>
+              </Button>
+              <Button 
+                variant="outline" 
+                className="h-14 bg-zinc-950 border-zinc-800 justify-start hover:bg-orange-500 hover:text-white"
+                onClick={() => exportPDF('month')}
+              >
+                <div className="flex flex-col items-start ml-2 text-left">
+                  <span className="font-black uppercase">This Month</span>
+                  <span className="text-[10px] text-zinc-500 opacity-80">{format(viewDate, 'MMMM yyyy')}</span>
+                </div>
+              </Button>
+            </div>
+          </div>
+          <DialogFooter className="p-6 border-t border-zinc-800 bg-black">
+            <DialogClose asChild>
+              <Button variant="ghost" className="w-full text-zinc-400 hover:text-white hover:bg-zinc-800 uppercase font-black text-[10px] tracking-widest">
+                Cancel
+              </Button>
+            </DialogClose>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Entry Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
@@ -905,81 +999,6 @@ function Login({ onLogin }: { onLogin: () => void }) {
                 <p className="text-xs text-red-400 font-medium">{loginError}</p>
               </div>
             )}
-
-            <div className="mt-8 pt-8 border-t border-zinc-800/50">
-              <button 
-                onClick={() => setShowDebug(!showDebug)}
-                className="text-[10px] font-black text-zinc-600 hover:text-orange-500 uppercase tracking-widest transition-colors"
-              >
-                {showDebug ? 'Hide Login Help' : 'Login Help / Troubleshooting'}
-              </button>
-              
-              {showDebug && (
-                <motion.div 
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  className="mt-4 p-4 bg-black rounded-xl border border-zinc-800 space-y-3 text-left"
-                >
-                  <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Master Credentials:</p>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="p-2 bg-zinc-900 rounded border border-zinc-800">
-                      <p className="text-[9px] text-zinc-500 uppercase">User</p>
-                      <p className="text-xs font-mono text-white">admin</p>
-                    </div>
-                    <div className="p-2 bg-zinc-900 rounded border border-zinc-800">
-                      <p className="text-[9px] text-zinc-500 uppercase">Pass</p>
-                      <p className="text-xs font-mono text-white">6604</p>
-                    </div>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => { setUsername('admin'); setPassword('6604'); }}
-                      className="flex-1 h-8 border-orange-500/20 text-orange-500 hover:bg-orange-500/10 text-[9px] font-black uppercase tracking-widest"
-                    >
-                      Auto-fill Master
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={async () => {
-                        try {
-                          const res = await fetch('/api/health');
-                          const text = await res.text();
-                          if (res.ok) {
-                            setLoginError(`Backend is reachable! Status: ${res.status}. Response: ${text.substring(0, 50)}`);
-                          } else {
-                            setLoginError(`Backend returned error! Status: ${res.status}. Response: ${text.substring(0, 50)}`);
-                          }
-                        } catch (e: any) {
-                          setLoginError(`Backend is UNREACHABLE! Error: ${e.message}`);
-                        }
-                      }}
-                      className="flex-1 h-8 border-blue-500/20 text-blue-500 hover:bg-blue-500/10 text-[9px] font-black uppercase tracking-widest"
-                    >
-                      Test Server
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={() => {
-                        localStorage.setItem('nic_token', 'secret-token-nic-2026');
-                        onLogin();
-                        toast.success('Emergency Bypass Activated');
-                      }}
-                      className="flex-1 h-8 border-red-500/20 text-red-500 hover:bg-red-500/10 text-[9px] font-black uppercase tracking-widest"
-                    >
-                      Force Bypass
-                    </Button>
-                  </div>
-                  <p className="text-[9px] text-zinc-500 leading-relaxed">
-                    If your long password fails, please use the master credentials above. 
-                    Ensure there are no leading or trailing spaces.
-                  </p>
-                </motion.div>
-              )}
-            </div>
           </CardContent>
           <div className="p-6 bg-black border-t border-zinc-800 text-center">
             <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.3em]">

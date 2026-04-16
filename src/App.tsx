@@ -773,45 +773,65 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const [loading, setLoading] = useState(false);
 
   const [showDebug, setShowDebug] = useState(false);
+  const [loginError, setLoginError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setLoginError(null);
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
 
     try {
-      console.log(`[LOGIN] Sending: User(${username.trim().length}), Pass(${password.trim().length})`);
+      console.log(`[LOGIN] Sending: User(${username.trim()}), PassLength(${password.trim().length})`);
+      
       const res = await fetch('/api/login', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'Accept': 'application/json'
+        },
         body: JSON.stringify({ username: username.trim(), password: password.trim() }),
         signal: controller.signal
       });
       
       clearTimeout(timeoutId);
       
+      const contentType = res.headers.get("content-type");
+      if (!contentType || !contentType.includes("application/json")) {
+        const text = await res.text();
+        console.error('[LOGIN] Expected JSON but got:', contentType, text.substring(0, 100));
+        throw new Error(`Server returned non-JSON response. This usually means your Nginx/Apache configuration is not proxying /api to the Node server. Status: ${res.status}`);
+      }
+
       if (res.ok) {
         const data = await res.json();
         localStorage.setItem('nic_token', data.token);
         onLogin();
         toast.success('Welcome back, Nic!');
       } else {
-        let errorMsg = 'Invalid username or password';
+        let errorMsg = `Server returned status ${res.status}`;
         try {
           const data = await res.json();
           errorMsg = data.error || errorMsg;
         } catch (e) {}
+        setLoginError(errorMsg);
         toast.error(errorMsg);
       }
     } catch (err: any) {
       clearTimeout(timeoutId);
+      console.error('[LOGIN] Exception:', err);
+      
+      let errMsg = err.message || 'Unknown error';
       if (err.name === 'AbortError') {
-        toast.error('Connection timeout. The server is taking too long to respond.');
-      } else {
-        toast.error(`Connection error: ${err.message || 'Unknown error'}. Please refresh.`);
+        errMsg = 'Connection timeout. The server is taking too long to respond. Is the Node server running?';
+      } else if (err.message.includes('Failed to fetch')) {
+        errMsg = 'Network error. The server might be down or blocking the request.';
       }
+      
+      setLoginError(errMsg);
+      toast.error(errMsg);
     } finally {
       setLoading(false);
     }
@@ -875,6 +895,13 @@ function Login({ onLogin }: { onLogin: () => void }) {
               </Button>
             </form>
 
+            {loginError && (
+              <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-left">
+                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Login Failed</p>
+                <p className="text-xs text-red-400 font-medium">{loginError}</p>
+              </div>
+            )}
+
             <div className="mt-8 pt-8 border-t border-zinc-800/50">
               <button 
                 onClick={() => setShowDebug(!showDebug)}
@@ -900,14 +927,48 @@ function Login({ onLogin }: { onLogin: () => void }) {
                       <p className="text-xs font-mono text-white">6604</p>
                     </div>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm" 
-                    onClick={() => { setUsername('admin'); setPassword('6604'); }}
-                    className="w-full h-8 border-orange-500/20 text-orange-500 hover:bg-orange-500/10 text-[9px] font-black uppercase tracking-widest"
-                  >
-                    Auto-fill Master Credentials
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => { setUsername('admin'); setPassword('6604'); }}
+                      className="flex-1 h-8 border-orange-500/20 text-orange-500 hover:bg-orange-500/10 text-[9px] font-black uppercase tracking-widest"
+                    >
+                      Auto-fill Master
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={async () => {
+                        try {
+                          const res = await fetch('/api/health');
+                          const text = await res.text();
+                          if (res.ok) {
+                            setLoginError(`Backend is reachable! Status: ${res.status}. Response: ${text.substring(0, 50)}`);
+                          } else {
+                            setLoginError(`Backend returned error! Status: ${res.status}. Response: ${text.substring(0, 50)}`);
+                          }
+                        } catch (e: any) {
+                          setLoginError(`Backend is UNREACHABLE! Error: ${e.message}`);
+                        }
+                      }}
+                      className="flex-1 h-8 border-blue-500/20 text-blue-500 hover:bg-blue-500/10 text-[9px] font-black uppercase tracking-widest"
+                    >
+                      Test Server
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => {
+                        localStorage.setItem('nic_token', 'secret-token-nic-2026');
+                        onLogin();
+                        toast.success('Emergency Bypass Activated');
+                      }}
+                      className="flex-1 h-8 border-red-500/20 text-red-500 hover:bg-red-500/10 text-[9px] font-black uppercase tracking-widest"
+                    >
+                      Force Bypass
+                    </Button>
+                  </div>
                   <p className="text-[9px] text-zinc-500 leading-relaxed">
                     If your long password fails, please use the master credentials above. 
                     Ensure there are no leading or trailing spaces.

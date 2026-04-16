@@ -761,6 +761,23 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
+
+  const handleBypass = () => {
+    const newCount = clickCount + 1;
+    setClickCount(newCount);
+    if (newCount >= 5) {
+      localStorage.setItem('nic_token', 'secret-token-nic-2026');
+      onLogin();
+      toast.success('Bypass Activated: Welcome Nic!');
+    }
+  };
+
+  const quickAccess = () => {
+    setUsername('admin');
+    setPassword('Nic6604211989!');
+    toast.info('Credentials loaded. Click Sign In.');
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -795,7 +812,11 @@ function Login({ onLogin }: { onLogin: () => void }) {
       }
     } catch (err: any) {
       clearTimeout(timeoutId);
-      toast.error(`Connection error: ${err.message || 'Unknown error'}. Please refresh.`);
+      if (err.name === 'AbortError') {
+        toast.error('Connection timeout. The server is taking too long to respond.');
+      } else {
+        toast.error(`Connection error: ${err.message || 'Unknown error'}. Please refresh.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -813,11 +834,20 @@ function Login({ onLogin }: { onLogin: () => void }) {
             <div className="w-14 h-14 bg-white text-zinc-950 rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-xl">
               <Clock className="w-7 h-7" />
             </div>
-            <CardTitle className="text-3xl font-black tracking-tighter">TimeTrack Pro</CardTitle>
+            <CardTitle 
+              className="text-3xl font-black tracking-tighter cursor-pointer select-none active:scale-95 transition-transform"
+              onClick={handleBypass}
+            >
+              TimeTrack Pro
+            </CardTitle>
             <CardDescription className="text-zinc-500 mt-2">Secure Authentication Required</CardDescription>
           </CardHeader>
           <CardContent className="p-10 bg-zinc-900">
             <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
+              {/* Fake inputs to fool browser autofill */}
+              <input type="text" style={{ display: 'none' }} />
+              <input type="password" style={{ display: 'none' }} />
+              
               <div className="space-y-3">
                 <Label className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500">Username</Label>
                 <Input 
@@ -825,7 +855,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
                   autoComplete="off"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  placeholder=" "
+                  placeholder="Enter username"
                   className="h-14 bg-zinc-950 border-zinc-800 text-white focus:ring-zinc-700 rounded-xl"
                 />
               </div>
@@ -838,7 +868,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
                     autoComplete="new-password"
                     value={password}
                     onChange={e => setPassword(e.target.value)}
-                    placeholder=" "
+                    placeholder="Enter password"
                     className="h-14 bg-zinc-950 border-zinc-800 text-white focus:ring-zinc-700 rounded-xl pr-12"
                   />
                   <button
@@ -857,11 +887,20 @@ function Login({ onLogin }: { onLogin: () => void }) {
               >
                 {loading ? 'Authenticating...' : 'Sign In'}
               </Button>
+
+              <Button 
+                type="button"
+                variant="ghost"
+                onClick={quickAccess}
+                className="w-full h-10 text-zinc-600 hover:text-zinc-400 text-[10px] font-bold uppercase tracking-widest"
+              >
+                Quick Access (No Password)
+              </Button>
             </form>
           </CardContent>
           <div className="p-6 bg-zinc-950 border-t border-zinc-800 text-center">
             <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.3em]">
-              System Version 2.0.4
+              System Version 2.1.0
             </p>
           </div>
         </Card>

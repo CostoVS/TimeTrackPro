@@ -26,13 +26,16 @@ async function startServer() {
     const { username, password } = req.body;
     
     if (!username || !password) {
+      console.log('[LOGIN] Missing credentials');
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
     const normalizedUsername = username.toLowerCase().trim();
     const normalizedPassword = password.trim();
 
-    console.log(`[LOGIN] Attempt - User: "${normalizedUsername}", Pass: "${normalizedPassword}"`);
+    // Log character codes to detect hidden characters
+    const passCodes = Array.from(normalizedPassword).map(c => c.charCodeAt(0)).join(',');
+    console.log(`[LOGIN] Attempt - User: "${normalizedUsername}", Pass: "${normalizedPassword}" (Codes: ${passCodes})`);
 
     // Extremely robust comparison
     const isUserAdmin = normalizedUsername === 'admin';
@@ -47,6 +50,14 @@ async function startServer() {
       console.log(`[LOGIN] Failed - User match: ${isUserAdmin}, Pass match: ${isPassCorrect}`);
       return res.status(401).json({ error: 'Invalid username or password' });
     }
+  });
+
+  app.get('/api/login-test', (req, res) => {
+    res.json({ 
+      message: 'Login API is alive', 
+      expected_user: 'admin',
+      expected_pass_length: 'Nic6604211989!'.length
+    });
   });
 
   // Database setup

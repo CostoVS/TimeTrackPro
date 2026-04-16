@@ -91,7 +91,9 @@ export default function App() {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     };
+    
     const res = await fetch(url, { ...options, headers });
+
     if (res.status === 401) {
       localStorage.removeItem('nic_token');
       setIsAuthenticated(false);
@@ -802,7 +804,7 @@ function Login({ onLogin }: { onLogin: () => void }) {
       if (!contentType || !contentType.includes("application/json")) {
         const text = await res.text();
         console.error('[LOGIN] Expected JSON but got:', contentType, text.substring(0, 100));
-        throw new Error(`Server returned non-JSON response. This usually means your Nginx/Apache configuration is not proxying /api to the Node server. Status: ${res.status}`);
+        throw new Error(`Backend API is unreachable. The server might be starting up, or running in static mode. Please use the Force Bypass button below. Status: ${res.status}`);
       }
 
       if (res.ok) {

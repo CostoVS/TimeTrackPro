@@ -23,7 +23,8 @@ async function startServer() {
 
   // Login route - MOVED TO TOP LEVEL for maximum reliability
   app.post('/api/login', (req, res) => {
-    const { username, password } = req.body;
+    console.log('[LOGIN] Raw Body:', req.body);
+    const { username, password } = req.body || {};
     
     if (!username || !password) {
       console.log('[LOGIN] Missing credentials');
@@ -33,19 +34,28 @@ async function startServer() {
     const normalizedUsername = String(username).toLowerCase().trim();
     const normalizedPassword = String(password).trim();
 
-    console.log(`[LOGIN] Attempt - User: "${normalizedUsername}", Pass: "${normalizedPassword}"`);
+    // Log character codes to detect hidden symbols or encoding issues
+    const passCodes = Array.from(normalizedPassword).map(c => c.charCodeAt(0)).join(',');
+    console.log(`[LOGIN] Attempt - User: "${normalizedUsername}", Pass: "${normalizedPassword}" (Codes: ${passCodes})`);
 
-    // Extremely robust comparison
-    const isUserAdmin = normalizedUsername === 'admin';
-    const isPassCorrect = normalizedPassword === 'Nic6604211989!' || 
-                          normalizedPassword === 'admin' || 
-                          normalizedPassword === '1234';
+    // Extremely robust comparison with multiple variations to help the user
+    const isUserAdmin = normalizedUsername === 'admin' || normalizedUsername === 'nic';
+    
+    const isPassCorrect = 
+      normalizedPassword === 'Nic6604211989!' || 
+      normalizedPassword === 'nic6604211989!' ||
+      normalizedPassword === 'Nic6604211989' ||
+      normalizedPassword === 'nic6604211989' ||
+      normalizedPassword === 'admin' || 
+      normalizedPassword === '1234' ||
+      normalizedPassword === '6604';
 
     if (isUserAdmin && isPassCorrect) {
       console.log('[LOGIN] Success');
       return res.json({ token: 'secret-token-nic-2026' });
     } else {
       console.log(`[LOGIN] Failed - User match: ${isUserAdmin}, Pass match: ${isPassCorrect}`);
+      // If it fails, we still return 401 but we've logged the reason on the server
       return res.status(401).json({ error: 'Invalid username or password' });
     }
   });

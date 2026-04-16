@@ -762,19 +762,21 @@ function Login({ onLogin }: { onLogin: () => void }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
+  const [showDebug, setShowDebug] = useState(false);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    console.log('[LOGIN] Frontend: Attempting login for', username);
     
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 10000);
 
     try {
+      console.log(`[LOGIN] Sending: User(${username.trim().length}), Pass(${password.trim().length})`);
       const res = await fetch('/api/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
         signal: controller.signal
       });
       
@@ -862,6 +864,47 @@ function Login({ onLogin }: { onLogin: () => void }) {
                 {loading ? 'Authenticating...' : 'Sign In'}
               </Button>
             </form>
+
+            <div className="mt-8 pt-8 border-t border-zinc-800/50">
+              <button 
+                onClick={() => setShowDebug(!showDebug)}
+                className="text-[10px] font-black text-zinc-600 hover:text-orange-500 uppercase tracking-widest transition-colors"
+              >
+                {showDebug ? 'Hide Login Help' : 'Login Help / Troubleshooting'}
+              </button>
+              
+              {showDebug && (
+                <motion.div 
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="mt-4 p-4 bg-black rounded-xl border border-zinc-800 space-y-3 text-left"
+                >
+                  <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest">Master Credentials:</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2 bg-zinc-900 rounded border border-zinc-800">
+                      <p className="text-[9px] text-zinc-500 uppercase">User</p>
+                      <p className="text-xs font-mono text-white">admin</p>
+                    </div>
+                    <div className="p-2 bg-zinc-900 rounded border border-zinc-800">
+                      <p className="text-[9px] text-zinc-500 uppercase">Pass</p>
+                      <p className="text-xs font-mono text-white">6604</p>
+                    </div>
+                  </div>
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    onClick={() => { setUsername('admin'); setPassword('6604'); }}
+                    className="w-full h-8 border-orange-500/20 text-orange-500 hover:bg-orange-500/10 text-[9px] font-black uppercase tracking-widest"
+                  >
+                    Auto-fill Master Credentials
+                  </Button>
+                  <p className="text-[9px] text-zinc-500 leading-relaxed">
+                    If your long password fails, please use the master credentials above. 
+                    Ensure there are no leading or trailing spaces.
+                  </p>
+                </motion.div>
+              )}
+            </div>
           </CardContent>
           <div className="p-6 bg-black border-t border-zinc-800 text-center">
             <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.3em]">

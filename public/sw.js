@@ -1,28 +1,32 @@
-const CACHE_NAME = 'timetrack-v4';
+const CACHE_NAME = 'timetrack-v2.3.2';
 self.addEventListener('install', (e) => self.skipWaiting());
-self.addEventListener('activate', (e) => self.clients.claim());
+self.addEventListener('activate', (e) => {
+  e.waitUntil(
+    caches.keys().then((cacheNames) => {
+      return Promise.all(
+        cacheNames.map((cacheName) => {
+          if (cacheName !== CACHE_NAME && cacheName !== CACHE_NAME + '-api') {
+            return caches.delete(cacheName);
+          }
+        })
+      );
+    })
+  );
+  return self.clients.claim();
+});
 
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   
-  if (e.request.url.includes('/api/')) {
-    e.respondWith(
-      fetch(e.request)
-        .then(res => {
-          const resClone = res.clone();
-          caches.open(CACHE_NAME + '-api').then(cache => cache.put(e.request, resClone));
-          return res;
-        })
-        .catch(() => caches.match(e.request))
-    );
-    return;
-  }
-  
+  // Network First, Fallback to Cache
   e.respondWith(
-    caches.match(e.request).then((response) => response || fetch(e.request).then(res => {
-      const respClone = res.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(e.request, respClone));
-      return res;
-    }).catch(() => new Response('Offline', { status: 503 })))
+    fetch(e.request)
+      .then(res => {
+        const resClone = res.clone();
+        caches.open(e.request.url.includes('/api/') ? CACHE_NAME + '-api' : CACHE_NAME)
+          .then(cache => cache.put(e.request, resClone));
+        return res;
+      })
+      .catch(() => caches.match(e.request))
   );
 });

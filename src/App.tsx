@@ -933,7 +933,7 @@ export default function App() {
               <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-1">Manage your identity, tasks, and notes</p>
             </div>
 
-            {!isStandalone && (deferredPrompt || isIOS) && (
+            {!isStandalone && (
               <Card className="border-orange-500/30 bg-orange-500/10 shadow-xl shadow-orange-500/20 mb-6">
                 <CardHeader>
                   <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -949,11 +949,11 @@ export default function App() {
                       <Button onClick={handleInstallClick} className="bg-orange-500 hover:bg-orange-600 text-white font-bold tracking-widest uppercase">
                         Install Now
                       </Button>
-                    ) : isIOS ? (
-                      <div className="text-xs text-zinc-400 max-w-[200px] border border-zinc-800 bg-black/50 p-3 rounded-lg">
-                        Tap <span className="font-bold text-white uppercase tracking-wider mx-1 text-[10px] bg-zinc-800 px-1 rounded">Share</span> then <span className="font-bold text-white uppercase tracking-wider mx-1 text-[10px] bg-zinc-800 px-1 rounded">Add to Home Screen</span>
+                    ) : (
+                      <div className="text-xs text-zinc-400 max-w-[250px] border border-zinc-800 bg-black/50 p-3 rounded-lg leading-relaxed">
+                        Tap <span className="font-bold text-white uppercase tracking-wider mx-1 text-[10px] bg-zinc-800 px-1 rounded">{isIOS ? 'Share' : 'Menu'}</span> then <span className="font-bold text-white uppercase tracking-wider mx-1 text-[10px] bg-zinc-800 px-1 rounded">Add to Home Screen</span>
                       </div>
-                    ) : null}
+                    )}
                   </div>
                 </CardHeader>
               </Card>

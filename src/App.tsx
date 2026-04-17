@@ -93,6 +93,16 @@ const SA_HOLIDAYS: Record<string, string> = {
   '12-26': "Day of Goodwill"
 };
 
+const formatDecimalHours = (decimal: number) => {
+  const totalMin = Math.round(decimal * 60);
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0 && m === 0) return "0h";
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+};
+
 const MOTIVATIONS = [
   { text: "The future depends on what you do today.", author: "Mahatma Gandhi" },
   { text: "It always seems impossible until it's done.", author: "Nelson Mandela" },
@@ -511,7 +521,7 @@ export default function App() {
               </div>
               <div>
                 <span className="text-xl font-black tracking-tighter text-white uppercase">TimeTrack Pro</span>
-                <Badge variant="outline" className="ml-3 text-[10px] py-0 h-5 border-zinc-800 text-zinc-500 font-black">v2.2</Badge>
+                <Badge variant="outline" className="ml-3 text-[10px] py-0 h-5 border-zinc-800 text-zinc-500 font-black">v2.3</Badge>
               </div>
             </div>
 
@@ -601,6 +611,34 @@ export default function App() {
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 relative z-10 mb-20 md:mb-8">
         {viewMode === 'dashboard' ? (
           <>
+            {!isStandalone && (
+              <Card className="border-orange-500/30 bg-orange-500/5 shadow-xl shadow-orange-500/10 mb-8 overflow-hidden group">
+                <div className="absolute inset-0 bg-gradient-to-r from-orange-500/0 via-orange-500/5 to-orange-500/0 -translate-x-full group-hover:translate-x-full transition-transform duration-1000" />
+                <CardHeader className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div className="flex gap-4">
+                      <div className="w-10 h-10 bg-orange-500 rounded-xl flex items-center justify-center shrink-0">
+                        <Download className="w-5 h-5 text-white" />
+                      </div>
+                      <div>
+                        <CardTitle className="text-sm font-black text-white uppercase tracking-tight">Install App</CardTitle>
+                        <CardDescription className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-0.5">Save to home screen for native experience</CardDescription>
+                      </div>
+                    </div>
+                    {deferredPrompt ? (
+                      <Button onClick={handleInstallClick} size="sm" className="bg-orange-500 hover:bg-orange-600 text-white font-bold tracking-widest uppercase text-[10px] h-9 px-6 rounded-lg ml-auto sm:ml-0">
+                        Install Now
+                      </Button>
+                    ) : (
+                      <div className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest border border-zinc-800 bg-black/50 p-2 rounded-lg leading-relaxed flex items-center gap-2">
+                        <span>Tap <span className="text-zinc-200">{isIOS ? 'Share' : 'Menu'}</span> & <span className="text-zinc-200">Add to Home Screen</span></span>
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+              </Card>
+            )}
+
             {/* Motivation Banner */}
             <motion.div 
               initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}
@@ -734,14 +772,14 @@ export default function App() {
                 )}
                 <StatCard 
                   label="Monthly Total" 
-                  value={`${stats.monthTotal.toFixed(1)}h`} 
+                  value={formatDecimalHours(stats.monthTotal)} 
                   icon={Calendar} 
                   description={format(viewDate, 'MMMM yyyy')}
                   trend="+12% from last month"
                 />
                 <StatCard 
                   label="Weekly Total" 
-                  value={`${stats.weekTotal.toFixed(1)}h`} 
+                  value={formatDecimalHours(stats.weekTotal)} 
                   icon={Briefcase} 
                   description="Current Week"
                 />

@@ -4,6 +4,8 @@ import sqlite3 from 'sqlite3';
 import { open, Database as SQLiteDatabase } from 'sqlite';
 import pg from 'pg';
 import path from 'path';
+import fs from 'fs';
+import multer from 'multer';
 import { createServer as createViteServer } from 'vite';
 import { stringify } from 'csv-stringify/sync';
 
@@ -92,6 +94,16 @@ async function startServer() {
           notes TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
+
+        CREATE TABLE IF NOT EXISTS documents (
+          id SERIAL PRIMARY KEY,
+          type TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          original_name TEXT NOT NULL,
+          mime_type TEXT,
+          upload_date TEXT NOT NULL,
+          description TEXT
+        );
       `);
     } else {
       await database.exec(`
@@ -112,6 +124,16 @@ async function startServer() {
           notes TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
+
+        CREATE TABLE IF NOT EXISTS documents (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          type TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          original_name TEXT NOT NULL,
+          mime_type TEXT,
+          upload_date TEXT NOT NULL,
+          description TEXT
+        );
       `);
 
       // SQLite Migration: Add missing columns if table already existed
@@ -173,6 +195,21 @@ async function startServer() {
       console.log('Fallback SQLite tables initialized');
     }
   }
+
+  // Multer setup
+  const uploadDir = path.join(process.cwd(), 'uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+
+  const storage = multer.diskStorage({
+    destination: (req, file, cb) => cb(null, uploadDir),
+    filename: (req, file, cb) => {
+      const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+      cb(null, uniqueSuffix + path.extname(file.originalname));
+    }
+  });
+  const upload = multer({ storage });
 
   // API Routes
   const router = express.Router();
@@ -301,6 +338,72 @@ async function startServer() {
     res.setHeader('Content-Type', 'text/csv');
     res.setHeader('Content-Disposition', 'attachment; filename=timesheet.csv');
     res.send(csv);
+  });
+
+  // Document management routes
+  router.get('/documents', async (req, res) => {
+    const { type } = req.query;
+    let sql = 'SELECT * FROM documents';
+    const params = [];
+    if (type) {
+      sql += ' WHERE type = ?';
+      params.push(type);
+    }
+    sql += ' ORDER BY upload_date DESC';
+    const docs = await db.all(sql, params);
+    res.json(docs);
+  });
+
+  router.post('/documents', upload.single('file'), async (req, res) => {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+    const { type, description } = req.body;
+    const { filename, originalname, mimetype } = req.file;
+    const uploadDate = new Date().toISOString();
+
+    const result = await db.run(
+      'INSERT INTO documents (type, filename, original_name, mime_type, upload_date, description) VALUES (?, ?, ?, ?, ?, ?)',
+      [type || 'misc', filename, originalname, mimetype, uploadDate, description || '']
+    );
+
+    const id = isPostgres ? result.rows[0].id : result.lastID;
+    res.json({ success: true, id });
+  });
+
+  router.get('/documents/:id/view', async (req, res) => {
+    const doc = await db.get('SELECT * FROM documents WHERE id = ?', [req.params.id]);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    
+    const filePath = path.join(uploadDir, doc.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing on server' });
+    
+    res.setHeader('Content-Type', doc.mime_type || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${doc.original_name}"`);
+    res.sendFile(filePath);
+  });
+
+  router.get('/documents/:id/download', async (req, res) => {
+    const doc = await db.get('SELECT * FROM documents WHERE id = ?', [req.params.id]);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    
+    const filePath = path.join(uploadDir, doc.filename);
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: 'File missing on server' });
+    
+    res.download(filePath, doc.original_name);
+  });
+
+  router.delete('/documents/:id', async (req, res) => {
+    const doc = await db.get('SELECT * FROM documents WHERE id = ?', [req.params.id]);
+    if (!doc) return res.status(404).json({ error: 'Document not found' });
+    
+    const filePath = path.join(uploadDir, doc.filename);
+    if (fs.existsSync(filePath)) {
+      fs.unlinkSync(filePath);
+    }
+    
+    await db.run('DELETE FROM documents WHERE id = ?', [req.params.id]);
+    res.json({ success: true });
   });
 
   app.use('/api', router);

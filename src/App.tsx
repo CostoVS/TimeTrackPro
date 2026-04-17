@@ -124,6 +124,7 @@ const MOTIVATIONS = [
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('nic_token'));
   const [sessions, setSessions] = useState<Session[]>([]);
+  const [documents, setDocuments] = useState<any[]>([]);
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewDate, setViewDate] = useState(new Date());
@@ -258,6 +259,7 @@ export default function App() {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     fetchSessions();
     fetchCurrentSession();
+    fetchDocuments();
     return () => {
       clearInterval(timer);
       window.removeEventListener('online', processOfflineQueue);
@@ -285,6 +287,52 @@ export default function App() {
       setCurrentSession(data);
     } catch (err) {
       console.error(err);
+    }
+  };
+
+  const fetchDocuments = async () => {
+    try {
+      const res = await authenticatedFetch('/api/documents');
+      const data = await res.json();
+      setDocuments(data);
+    } catch (err) {
+      console.error('Failed to fetch documents', err);
+    }
+  };
+
+  const uploadDocument = async (file: File, type: string) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('type', type);
+    
+    try {
+      const token = localStorage.getItem('nic_token');
+      const res = await fetch('/api/documents', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+        body: formData
+      });
+      
+      if (res.ok) {
+        toast.success(`Uploaded ${type.replace('_', ' ')} successfully`);
+        fetchDocuments();
+      } else {
+        toast.error('Upload failed');
+      }
+    } catch (err) {
+      toast.error('Upload error');
+    }
+  };
+
+  const deleteDocument = async (id: number) => {
+    try {
+      await authenticatedFetch(`/api/documents/${id}`, { method: 'DELETE' });
+      toast.success('Document deleted');
+      fetchDocuments();
+    } catch (err) {
+      toast.error('Failed to delete document');
     }
   };
 
@@ -1133,6 +1181,44 @@ export default function App() {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Document Storage: Payslips */}
+              <DocumentManager 
+                title="Payslip Vault" 
+                type="payslip" 
+                docs={documents.filter(d => d.type === 'payslip')} 
+                onUpload={uploadDocument} 
+                onDelete={deleteDocument} 
+              />
+
+              {/* Document Storage: Provident Fund */}
+              <DocumentManager 
+                title="Provident Fund" 
+                type="provident_fund" 
+                docs={documents.filter(d => d.type === 'provident_fund')} 
+                onUpload={uploadDocument} 
+                onDelete={deleteDocument} 
+              />
+
+              {/* Document Storage: Shift Images */}
+              <DocumentManager 
+                title="Shift Documentation" 
+                icon={Camera}
+                type="shift_image" 
+                docs={documents.filter(d => d.type === 'shift_image')} 
+                onUpload={uploadDocument} 
+                onDelete={deleteDocument} 
+              />
+
+              {/* Document Storage: Sick Notes */}
+              <DocumentManager 
+                title="Sick Notes" 
+                icon={HeartPulse}
+                type="sick_note" 
+                docs={documents.filter(d => d.type === 'sick_note')} 
+                onUpload={uploadDocument} 
+                onDelete={deleteDocument} 
+              />
             </div>
           </div>
         ) : null}
@@ -1573,3 +1659,114 @@ function StatCard({ label, value, icon: Icon, description, trend, variant = 'def
     </Card>
   );
 }
+
+function DocumentManager({ title, type, docs, onUpload, onDelete, icon: Icon = FileText }: any) {
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  const downloadFile = (id: number, name: string) => {
+    const token = localStorage.getItem('nic_token');
+    fetch(`/api/documents/${id}/download`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    .then(res => res.blob())
+    .then(blob => {
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    });
+  };
+
+  return (
+    <Card className="border-zinc-800 bg-zinc-900/40 backdrop-blur-xl shadow-xl shadow-black/20 orange-glow">
+      <CardHeader className="border-b border-zinc-800/50 pb-6">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Icon className="w-5 h-5 text-orange-500" />
+            <CardTitle className="text-lg font-black text-white uppercase tracking-tight">{title}</CardTitle>
+          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            onClick={() => fileInputRef.current?.click()}
+            className="text-orange-500 hover:text-white hover:bg-orange-500/20 text-[10px] font-bold uppercase tracking-widest"
+          >
+            <Plus className="w-4 h-4 mr-1" /> Upload
+          </Button>
+          <input 
+            type="file" 
+            ref={fileInputRef} 
+            className="hidden" 
+            accept="image/*,application/pdf,.csv,.doc,.docx,.xls,.xlsx"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onUpload(file, type);
+            }} 
+          />
+        </div>
+      </CardHeader>
+      <CardContent className="p-4">
+        <div className="space-y-2">
+          {docs.map((doc: any) => (
+            <div key={doc.id} className="flex items-center justify-between p-3 bg-black rounded-xl border border-zinc-800 group transition-all hover:border-zinc-700">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-8 h-8 rounded-lg bg-zinc-900 flex items-center justify-center shrink-0 border border-zinc-800">
+                  <FileDown className="w-4 h-4 text-zinc-500" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-zinc-300 truncate tracking-tight">{doc.original_name}</p>
+                  <p className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest flex items-center gap-2">
+                    {format(parseISO(doc.upload_date), 'dd MMM yyyy')}
+                    <span className="w-1 h-1 rounded-full bg-zinc-800" />
+                    {doc.mime_type?.split('/')[1]?.toUpperCase() || 'FILE'}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-1">
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="w-8 h-8 text-zinc-500 hover:text-orange-500 transition-colors"
+                  onClick={() => {
+                    const token = localStorage.getItem('nic_token');
+                    window.open(`/api/documents/${doc.id}/view?token=${token}`, '_blank');
+                  }}
+                  title="View"
+                >
+                  <Eye className="w-4 h-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="w-8 h-8 text-zinc-500 hover:text-orange-500 transition-colors"
+                  onClick={() => downloadFile(doc.id, doc.original_name)}
+                  title="Download"
+                >
+                  <Download className="w-4 h-4" />
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  size="icon" 
+                  className="w-8 h-8 text-zinc-500 hover:text-red-500 transition-colors"
+                  onClick={() => onDelete(doc.id)}
+                  title="Delete"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          ))}
+          {docs.length === 0 && (
+            <div className="py-8 text-center">
+               <p className="text-zinc-600 text-[10px] font-bold uppercase tracking-widest italic">No files in pool</p>
+            </div>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+

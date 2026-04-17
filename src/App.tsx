@@ -29,6 +29,7 @@ import {
   Eye,
   EyeOff,
   User,
+  Camera,
   CheckSquare,
   StickyNote,
   CalendarDays,

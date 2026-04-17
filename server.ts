@@ -221,7 +221,8 @@ async function startServer() {
   // Authentication middleware
   const authenticate = (req: express.Request, res: express.Response, next: express.NextFunction) => {
     const authHeader = req.headers.authorization;
-    if (authHeader === 'Bearer secret-token-nic-2026') {
+    const authQuery = req.query.token;
+    if (authHeader === 'Bearer secret-token-nic-2026' || authQuery === 'secret-token-nic-2026') {
       next();
     } else {
       console.log(`[AUTH] Unauthorized access attempt to ${req.path}`);

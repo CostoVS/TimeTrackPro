@@ -403,19 +403,38 @@ export default function App() {
 
   const calculateLiveDuration = () => {
     if (!currentSession?.clock_in) return '00:00:00';
-    let seconds = differenceInSeconds(currentTime, parseISO(currentSession.clock_in));
+    const end = currentSession.clock_out ? parseISO(currentSession.clock_out) : currentTime;
+    let seconds = differenceInSeconds(end, parseISO(currentSession.clock_in));
     
     // Deduct lunch if it happened
     if (currentSession.lunch_out && currentSession.lunch_in) {
       seconds -= differenceInSeconds(parseISO(currentSession.lunch_in), parseISO(currentSession.lunch_out));
     } else if (currentSession.lunch_out) {
-      seconds -= differenceInSeconds(currentTime, parseISO(currentSession.lunch_out));
+      seconds -= differenceInSeconds(end, parseISO(currentSession.lunch_out));
     }
     
+    // Ensure seconds is not negative
+    seconds = Math.max(0, seconds);
     const h = Math.floor(seconds / 3600);
     const m = Math.floor((seconds % 3600) / 60);
     const s = seconds % 60;
     return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+  };
+
+  const getBreakDuration = (type: 'tea' | 'lunch') => {
+    if (!currentSession) return null;
+    const startObj = type === 'tea' ? currentSession.tea_out : currentSession.lunch_out;
+    const endObj = type === 'tea' ? currentSession.tea_in : currentSession.lunch_in;
+    
+    if (!startObj) return null;
+    const end = endObj ? parseISO(endObj) : (currentSession.clock_out ? parseISO(currentSession.clock_out) : currentTime);
+    let seconds = differenceInSeconds(end, parseISO(startObj));
+    seconds = Math.max(0, seconds);
+    
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
   const currentStatus = currentSession?.status || 'idle';
@@ -567,6 +586,16 @@ export default function App() {
                       <span className="text-[10px] font-bold text-zinc-500 mt-2 tracking-widest relative">
                         SAST: {new Date(currentTime.toLocaleString('en-US', { timeZone: 'Africa/Johannesburg' })).toLocaleTimeString('en-US', { hour12: false })}
                       </span>
+                      {currentStatus === 'on_tea' && (
+                        <span className="text-[10px] font-bold text-orange-500 mt-2 tracking-widest relative bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">
+                          TEA: {getBreakDuration('tea')}
+                        </span>
+                      )}
+                      {currentStatus === 'on_lunch' && (
+                        <span className="text-[10px] font-bold text-orange-500 mt-2 tracking-widest relative bg-orange-500/10 px-2 py-0.5 rounded border border-orange-500/20">
+                          LUNCH: {getBreakDuration('lunch')}
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4 w-full max-w-md">

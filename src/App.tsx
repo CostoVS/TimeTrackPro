@@ -32,7 +32,8 @@ import {
   CheckSquare,
   StickyNote,
   CalendarDays,
-  Quote
+  Quote,
+  Download
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isWithinInterval, differenceInSeconds, getDayOfYear } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -71,6 +72,7 @@ interface Session {
 
 const LEAVE_TYPES = [
   { id: 'work_manual', label: 'Days Worked (Manual Hours)', icon: Briefcase, color: 'text-orange-600', bg: 'bg-orange-50', border: 'border-orange-100' },
+  { id: 'future_shift', label: 'Future Planned Shift', icon: Calendar, color: 'text-purple-600', bg: 'bg-purple-50', border: 'border-purple-100' },
   { id: 'sick_paid', label: 'Sick Day (Paid)', icon: HeartPulse, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-100' },
   { id: 'sick_unpaid', label: 'Sick Day (Unpaid)', icon: HeartPulse, color: 'text-zinc-600', bg: 'bg-zinc-50', border: 'border-zinc-100' },
   { id: 'annual_paid', label: 'Leave (Paid)', icon: Palmtree, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-100' },
@@ -122,6 +124,33 @@ export default function App() {
   const [viewMode, setViewMode] = useState<'dashboard' | 'history' | 'profile'>('dashboard');
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportTimeframe, setExportTimeframe] = useState<'day' | 'week' | 'month'>('month');
+
+  // PWA Install State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isIOS, setIsIOS] = useState(false);
+  const [isStandalone, setIsStandalone] = useState(false);
+
+  useEffect(() => {
+    setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
+    setIsStandalone(window.matchMedia('(display-mode: standalone)').matches || (window.navigator as any).standalone);
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setDeferredPrompt(null);
+    }
+  };
 
   const [notes, setNotes] = useState(() => localStorage.getItem('nic_notes') || '');
   const [todos, setTodos] = useState<{id: string, text: string, done: boolean}[]>(() => {
@@ -278,6 +307,11 @@ export default function App() {
       leaveDays: sessions.filter(s => s.leave_type && s.leave_type !== 'public_holiday' && s.leave_type !== 'work_manual').length,
     };
   }, [sessions, viewDate]);
+
+  const upcomingFutureShifts = useMemo(() => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    return sessions.filter(s => s.leave_type === 'future_shift' && s.date >= todayStr).sort((a,b) => a.date.localeCompare(b.date));
+  }, [sessions]);
 
   if (!isAuthenticated) {
     return (
@@ -594,6 +628,24 @@ export default function App() {
 
               {/* Stats Column */}
               <div className="space-y-6">
+                {upcomingFutureShifts.length > 0 && (
+                  <Card className="border-orange-500/30 bg-orange-500/5 backdrop-blur-xl shadow-xl shadow-orange-500/10">
+                    <CardHeader className="pb-2">
+                      <div className="flex items-center gap-2">
+                        <Calendar className="w-4 h-4 text-orange-500" />
+                        <CardTitle className="text-sm font-black text-white uppercase tracking-tight">Next Planned Shift</CardTitle>
+                      </div>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="text-xl font-bold text-orange-500">
+                        {format(parseISO(upcomingFutureShifts[0].date), 'dd MMM yyyy')}
+                      </div>
+                      <div className="text-xs font-bold text-zinc-400 mt-1 uppercase tracking-widest">
+                        {upcomingFutureShifts[0].clock_in ? format(parseISO(upcomingFutureShifts[0].clock_in), 'HH:mm') : '--:--'} - {upcomingFutureShifts[0].clock_out ? format(parseISO(upcomingFutureShifts[0].clock_out), 'HH:mm') : '--:--'}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
                 <StatCard 
                   label="Monthly Total" 
                   value={`${stats.monthTotal.toFixed(1)}h`} 
@@ -794,6 +846,32 @@ export default function App() {
               <h2 className="text-2xl font-black text-white uppercase tracking-tight">Dossier / Dashboard</h2>
               <p className="text-zinc-500 text-[10px] font-bold uppercase tracking-widest mt-1">Manage your identity, tasks, and notes</p>
             </div>
+
+            {!isStandalone && (deferredPrompt || isIOS) && (
+              <Card className="border-orange-500/30 bg-orange-500/10 shadow-xl shadow-orange-500/20 mb-6">
+                <CardHeader>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                    <div>
+                      <CardTitle className="text-lg font-bold text-orange-500 flex items-center gap-2">
+                        <Download className="w-5 h-5" /> Install App
+                      </CardTitle>
+                      <CardDescription className="text-zinc-400 mt-1">
+                        Install TimeTrack Pro to your home screen for a fullscreen, native app experience!
+                      </CardDescription>
+                    </div>
+                    {deferredPrompt ? (
+                      <Button onClick={handleInstallClick} className="bg-orange-500 hover:bg-orange-600 text-white font-bold tracking-widest uppercase">
+                        Install Now
+                      </Button>
+                    ) : isIOS ? (
+                      <div className="text-xs text-zinc-400 max-w-[200px] border border-zinc-800 bg-black/50 p-3 rounded-lg">
+                        Tap <span className="font-bold text-white uppercase tracking-wider mx-1 text-[10px] bg-zinc-800 px-1 rounded">Share</span> then <span className="font-bold text-white uppercase tracking-wider mx-1 text-[10px] bg-zinc-800 px-1 rounded">Add to Home Screen</span>
+                      </div>
+                    ) : null}
+                  </div>
+                </CardHeader>
+              </Card>
+            )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
               {/* Profile Details */}
@@ -1041,7 +1119,7 @@ export default function App() {
               </div>
             </div>
 
-            {editingSession?.leave_type ? (
+            {editingSession?.leave_type && editingSession.leave_type !== 'future_shift' ? (
               <motion.div 
                 initial={{ opacity: 0, y: -10 }} 
                 animate={{ opacity: 1, y: 0 }}
@@ -1071,30 +1149,83 @@ export default function App() {
                 </div>
               </motion.div>
             ) : (
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Clock In</Label>
-                  <Input 
-                    type="time" 
-                    value={editingSession?.clock_in ? (editingSession.clock_in.includes('T') ? format(parseISO(editingSession.clock_in), 'HH:mm') : editingSession.clock_in) : ''}
-                    onChange={e => {
-                      const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
-                      setEditingSession({ ...editingSession, clock_in: `${date}T${e.target.value}:00` });
-                    }}
-                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl w-full" 
-                  />
+              <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Clock In</Label>
+                    <Input 
+                      type="time" 
+                      value={editingSession?.clock_in ? (editingSession.clock_in.includes('T') ? format(parseISO(editingSession.clock_in), 'HH:mm') : editingSession.clock_in) : ''}
+                      onChange={e => {
+                        const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
+                        setEditingSession({ ...editingSession, clock_in: `${date}T${e.target.value}:00` });
+                      }}
+                      className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl w-full" 
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Clock Out</Label>
+                    <Input 
+                      type="time" 
+                      value={editingSession?.clock_out ? (editingSession.clock_out.includes('T') ? format(parseISO(editingSession.clock_out), 'HH:mm') : editingSession.clock_out) : ''}
+                      onChange={e => {
+                        const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
+                        setEditingSession({ ...editingSession, clock_out: `${date}T${e.target.value}:00` });
+                      }}
+                      className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl w-full" 
+                    />
+                  </div>
                 </div>
-                <div className="space-y-3">
-                  <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Clock Out</Label>
-                  <Input 
-                    type="time" 
-                    value={editingSession?.clock_out ? (editingSession.clock_out.includes('T') ? format(parseISO(editingSession.clock_out), 'HH:mm') : editingSession.clock_out) : ''}
-                    onChange={e => {
-                      const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
-                      setEditingSession({ ...editingSession, clock_out: `${date}T${e.target.value}:00` });
-                    }}
-                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl w-full" 
-                  />
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 p-4 bg-black rounded-xl border border-zinc-800">
+                  <div className="space-y-3">
+                    <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Tea Out (Start)</Label>
+                    <Input 
+                      type="time" 
+                      value={editingSession?.tea_out ? (editingSession.tea_out.includes('T') ? format(parseISO(editingSession.tea_out), 'HH:mm') : editingSession.tea_out) : ''}
+                      onChange={e => {
+                        const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
+                        setEditingSession({ ...editingSession, tea_out: e.target.value ? `${date}T${e.target.value}:00` : null });
+                      }}
+                      className="h-10 bg-zinc-900 border-zinc-800 text-white text-xs focus:ring-orange-500 rounded-lg w-full" 
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Tea In (End)</Label>
+                    <Input 
+                      type="time" 
+                      value={editingSession?.tea_in ? (editingSession.tea_in.includes('T') ? format(parseISO(editingSession.tea_in), 'HH:mm') : editingSession.tea_in) : ''}
+                      onChange={e => {
+                        const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
+                        setEditingSession({ ...editingSession, tea_in: e.target.value ? `${date}T${e.target.value}:00` : null });
+                      }}
+                      className="h-10 bg-zinc-900 border-zinc-800 text-white text-xs focus:ring-orange-500 rounded-lg w-full" 
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Lunch Out (Start)</Label>
+                    <Input 
+                      type="time" 
+                      value={editingSession?.lunch_out ? (editingSession.lunch_out.includes('T') ? format(parseISO(editingSession.lunch_out), 'HH:mm') : editingSession.lunch_out) : ''}
+                      onChange={e => {
+                        const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
+                        setEditingSession({ ...editingSession, lunch_out: e.target.value ? `${date}T${e.target.value}:00` : null });
+                      }}
+                      className="h-10 bg-zinc-900 border-zinc-800 text-white text-xs focus:ring-orange-500 rounded-lg w-full" 
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Lunch In (End)</Label>
+                    <Input 
+                      type="time" 
+                      value={editingSession?.lunch_in ? (editingSession.lunch_in.includes('T') ? format(parseISO(editingSession.lunch_in), 'HH:mm') : editingSession.lunch_in) : ''}
+                      onChange={e => {
+                        const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
+                        setEditingSession({ ...editingSession, lunch_in: e.target.value ? `${date}T${e.target.value}:00` : null });
+                      }}
+                      className="h-10 bg-zinc-900 border-zinc-800 text-white text-xs focus:ring-orange-500 rounded-lg w-full" 
+                    />
+                  </div>
                 </div>
               </div>
             )}

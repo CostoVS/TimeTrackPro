@@ -774,14 +774,14 @@ export default function App() {
                   label="Monthly Total" 
                   value={formatDecimalHours(stats.monthTotal)} 
                   icon={Calendar} 
-                  description={format(viewDate, 'MMMM yyyy')}
+                  description={`Total for ${format(viewDate, 'MMMM yyyy')}`}
                   trend="+12% from last month"
                 />
                 <StatCard 
                   label="Weekly Total" 
                   value={formatDecimalHours(stats.weekTotal)} 
                   icon={Briefcase} 
-                  description="Current Week"
+                  description="Calculated as exact Hours & Minutes"
                 />
                 <StatCard 
                   label="Leave Balance" 
@@ -1276,7 +1276,9 @@ export default function App() {
               <div className="space-y-6">
                 <div className="grid grid-cols-2 gap-6">
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Clock In</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+                      {editingSession?.leave_type === 'future_shift' ? 'Shift Start' : 'Clock In'}
+                    </Label>
                     <Input 
                       type="time" 
                       value={editingSession?.clock_in ? (editingSession.clock_in.includes('T') ? format(parseISO(editingSession.clock_in), 'HH:mm') : editingSession.clock_in) : ''}
@@ -1288,7 +1290,9 @@ export default function App() {
                     />
                   </div>
                   <div className="space-y-3">
-                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Clock Out</Label>
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">
+                      {editingSession?.leave_type === 'future_shift' ? 'Shift End' : 'Clock Out'}
+                    </Label>
                     <Input 
                       type="time" 
                       value={editingSession?.clock_out ? (editingSession.clock_out.includes('T') ? format(parseISO(editingSession.clock_out), 'HH:mm') : editingSession.clock_out) : ''}

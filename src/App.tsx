@@ -32,8 +32,7 @@ import {
   CheckSquare,
   StickyNote,
   CalendarDays,
-  Quote,
-  Download
+  Quote
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isWithinInterval, differenceInSeconds, getDayOfYear } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -173,28 +172,86 @@ export default function App() {
 
   const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('nic_token');
-    const headers = {
-      ...options.headers,
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    };
+    const headers = { ...options.headers, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     
-    const res = await fetch(url, { ...options, headers });
-
-    if (res.status === 401) {
-      localStorage.removeItem('nic_token');
-      setIsAuthenticated(false);
-      throw new Error('Unauthorized');
+    // Offline mutation trap
+    if (!navigator.onLine && options.method && options.method !== 'GET') {
+      const offlineQueue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+      offlineQueue.push({ url, options: { ...options, headers } });
+      localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+      toast.warning('Offline mode: Changes saved locally and will sync when reconnected.');
+      
+      return {
+        status: 200,
+        ok: true,
+        json: async () => ({ message: 'Queued offline', status: 'offline_queued' })
+      } as Response;
     }
-    return res;
+
+    try {
+      const res = await fetch(url, { ...options, headers });
+      if (res.status === 401) {
+        localStorage.removeItem('nic_token');
+        setIsAuthenticated(false);
+        throw new Error('Unauthorized');
+      }
+      return res;
+    } catch (e) {
+      if (options.method && options.method !== 'GET') {
+        const offlineQueue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+        offlineQueue.push({ url, options: { ...options, headers } });
+        localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
+        toast.warning('Network error: Changes saved locally for future sync.');
+        return {
+          status: 200,
+          ok: true,
+          json: async () => ({ message: 'Queued offline fallback', status: 'offline_queued' })
+        } as Response;
+      }
+      throw e;
+    }
   };
 
   useEffect(() => {
     if (!isAuthenticated) return;
+    
+    const processOfflineQueue = async () => {
+      const queue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+      if (queue.length === 0 || !navigator.onLine) return;
+      
+      localStorage.setItem('offlineQueue', '[]'); // Optimistically clear
+      let successes = 0;
+      
+      for (const req of queue) {
+        try {
+          const token = localStorage.getItem('nic_token');
+          req.options.headers = { ...req.options.headers, 'Authorization': `Bearer ${token}` };
+          const res = await fetch(req.url, req.options);
+          if(res.ok) successes++;
+        } catch (e) {
+          const remaining = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
+          remaining.push(req);
+          localStorage.setItem('offlineQueue', JSON.stringify(remaining));
+        }
+      }
+      
+      if (successes > 0) {
+        toast.success(`Online! Synced ${successes} offline changes.`);
+        fetchSessions();
+        fetchCurrentSession();
+      }
+    };
+
+    window.addEventListener('online', processOfflineQueue);
+    processOfflineQueue();
+
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     fetchSessions();
     fetchCurrentSession();
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      window.removeEventListener('online', processOfflineQueue);
+    };
   }, [isAuthenticated]);
 
   const fetchSessions = async () => {

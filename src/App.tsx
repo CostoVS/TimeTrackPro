@@ -292,6 +292,9 @@ export default function App() {
   };
 
   const fetchDocuments = async () => {
+    // Check version first for debugging
+    fetch('/api/version').then(r => r.json()).catch(() => ({ version: 'OLD' })).then(d => console.log('Backend Version:', d.version));
+    
     try {
       const res = await authenticatedFetch('/api/documents');
       const data = await res.json();
@@ -326,8 +329,8 @@ export default function App() {
         console.error('Upload failed:', res.status, errorData);
       }
     } catch (err) {
-      toast.error('Network error during upload');
-      console.error('Upload catch:', err);
+      toast.error('Network error - Check server logs');
+      console.error('CRITICAL UPLOAD ERROR:', err);
     }
   };
 

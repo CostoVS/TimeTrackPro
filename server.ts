@@ -250,7 +250,11 @@ async function startServer() {
   router.use(authenticate);
 
   router.get('/health', (req, res) => {
-    res.json({ status: 'ok', time: new Date().toISOString() });
+    res.json({ status: 'ok', version: '2.6.0', time: new Date().toISOString() });
+  });
+
+  router.get('/version', (req, res) => {
+    res.json({ version: '2.6.0', updated: 'Document Vault Fixes' });
   });
 
   router.get('/sessions', async (req, res) => {

@@ -209,7 +209,10 @@ async function startServer() {
       cb(null, uniqueSuffix + path.extname(file.originalname));
     }
   });
-  const upload = multer({ storage });
+  const upload = multer({ 
+    storage,
+    limits: { fileSize: 20 * 1024 * 1024 } // 20MB limit
+  });
 
   // API Routes
   const router = express.Router();
@@ -228,6 +231,20 @@ async function startServer() {
       console.log(`[AUTH] Unauthorized access attempt to ${req.path}`);
       res.status(401).json({ error: 'Unauthorized' });
     }
+  };
+
+  const uploadHandler = (req: any, res: any, next: any) => {
+    upload.single('file')(req, res, (err) => {
+      if (err instanceof multer.MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') {
+          return res.status(400).json({ error: 'File too large (Max 20MB)' });
+        }
+        return res.status(400).json({ error: `Upload error: ${err.message}` });
+      } else if (err) {
+        return res.status(500).json({ error: 'Server error during upload' });
+      }
+      next();
+    });
   };
 
   router.use(authenticate);
@@ -297,7 +314,7 @@ async function startServer() {
     const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes } = req.body;
     const result = await db.run(
       `INSERT INTO sessions (date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ${isPostgres ? 'RETURNING id' : ''}`,
       [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status || 'done', leave_type, is_paid ? 1 : 0, leave_hours || 0, notes]
     );
     const id = isPostgres ? result.rows[0].id : result.lastID;
@@ -355,7 +372,7 @@ async function startServer() {
     res.json(docs);
   });
 
-  router.post('/documents', upload.single('file'), async (req, res) => {
+  router.post('/documents', uploadHandler, async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ error: 'No file uploaded' });
     }
@@ -364,7 +381,7 @@ async function startServer() {
     const uploadDate = new Date().toISOString();
 
     const result = await db.run(
-      'INSERT INTO documents (type, filename, original_name, mime_type, upload_date, description) VALUES (?, ?, ?, ?, ?, ?)',
+      `INSERT INTO documents (type, filename, original_name, mime_type, upload_date, description) VALUES (?, ?, ?, ?, ?, ?) ${isPostgres ? 'RETURNING id' : ''}`,
       [type || 'misc', filename, originalname, mimetype, uploadDate, description || '']
     );
 

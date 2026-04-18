@@ -320,10 +320,14 @@ export default function App() {
         toast.success(`Uploaded ${type.replace('_', ' ')} successfully`);
         fetchDocuments();
       } else {
-        toast.error('Upload failed');
+        const errorData = await res.json().catch(() => ({}));
+        const msg = errorData.error || `Upload failed with status ${res.status}`;
+        toast.error(msg);
+        console.error('Upload failed:', res.status, errorData);
       }
     } catch (err) {
-      toast.error('Upload error');
+      toast.error('Network error during upload');
+      console.error('Upload catch:', err);
     }
   };
 

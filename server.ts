@@ -6,6 +6,8 @@ import pg from 'pg';
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
+import { authenticator } from 'otplib';
+import QRCode from 'qrcode';
 import { createServer as createViteServer } from 'vite';
 import { stringify } from 'csv-stringify/sync';
 
@@ -53,12 +55,62 @@ async function startServer() {
       normalizedPassword === '6604';
 
     if (isUserAdmin && isPassCorrect) {
-      console.log('[LOGIN] Success');
-      return res.json({ token: 'secret-token-nic-2026' });
+      // TOTP Check
+      try {
+        const setting = await db.get('SELECT value FROM system_settings WHERE key = ?', ['totp_secret']);
+        
+        if (!setting) {
+          // Zero-config: Automatically initiate setup for the first admin
+          const secret = authenticator.generateSecret();
+          const otpauth = authenticator.keyuri(normalizedUsername, 'TimeTrack Pro', secret);
+          const qrCode = await QRCode.toDataURL(otpauth);
+          
+          return res.json({ 
+            requiresSetup: true, 
+            user: normalizedUsername, 
+            secret, 
+            qrCode 
+          });
+        }
+
+        return res.json({ requires2FA: true, user: normalizedUsername });
+      } catch (err) {
+        console.error('[2FA] Settings check failed:', err);
+        return res.json({ token: 'secret-token-nic-2026' }); // Fallback
+      }
     } else {
       console.log(`[LOGIN] Failed - User match: ${isUserAdmin}, Pass match: ${isPassCorrect}`);
-      // If it fails, we still return 401 but we've logged the reason on the server
       return res.status(401).json({ error: 'Invalid username or password' });
+    }
+  });
+
+  app.post('/api/verify-2fa', async (req, res) => {
+    const { username, otp, secret, isSetup } = req.body;
+    
+    try {
+      let finalSecret = secret;
+      
+      if (!isSetup) {
+        const setting = await db.get('SELECT value FROM system_settings WHERE key = ?', ['totp_secret']);
+        if (!setting) return res.status(400).json({ error: 'Security not configured' });
+        finalSecret = setting.value;
+      }
+
+      const isValid = authenticator.check(otp, finalSecret);
+
+      if (isValid) {
+        if (isSetup) {
+          // Save the secret permanently
+          await db.run('INSERT OR REPLACE INTO system_settings (key, value) VALUES (?, ?)', ['totp_secret', finalSecret]);
+          console.log('[2FA] Security Configured for first time');
+        }
+        return res.json({ token: 'secret-token-nic-2026' });
+      }
+
+      res.status(401).json({ error: 'Invalid security code. Please check your Authenticator App.' });
+    } catch (err) {
+      console.error('[2FA] Verification error:', err);
+      res.status(500).json({ error: 'Security verification failed' });
     }
   });
 
@@ -104,6 +156,10 @@ async function startServer() {
           upload_date TEXT NOT NULL,
           description TEXT
         );
+        CREATE TABLE IF NOT EXISTS system_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        );
       `);
     } else {
       await database.exec(`
@@ -133,6 +189,10 @@ async function startServer() {
           mime_type TEXT,
           upload_date TEXT NOT NULL,
           description TEXT
+        );
+        CREATE TABLE IF NOT EXISTS system_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT
         );
       `);
 

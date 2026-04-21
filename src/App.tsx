@@ -21,6 +21,8 @@ import {
   Home,
   Save,
   MoreVertical,
+  ShieldCheck,
+  ShieldPlus,
   History,
   LayoutDashboard,
   Timer,
@@ -33,7 +35,8 @@ import {
   CheckSquare,
   StickyNote,
   CalendarDays,
-  Quote
+  Quote,
+  Copy
 } from 'lucide-react';
 import { format, parseISO, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths, startOfWeek, endOfWeek, isWithinInterval, differenceInSeconds, getDayOfYear } from 'date-fns';
 import { motion, AnimatePresence } from 'motion/react';
@@ -168,9 +171,9 @@ export default function App() {
     const saved = localStorage.getItem('nic_todos');
     return saved ? JSON.parse(saved) : [];
   });
-  const [profile, setProfile] = useState<{name: string, empNumber: string, details: string}>(() => {
+  const [profile, setProfile] = useState<{name: string, empNumber: string, email: string, details: string}>(() => {
     const saved = localStorage.getItem('nic_profile');
-    return saved ? JSON.parse(saved) : { name: '', empNumber: '', details: '' };
+    return saved ? JSON.parse(saved) : { name: '', empNumber: '', email: 'nicholauscostochetty@gmail.com', details: '' };
   });
 
   const dailyMotivation = useMemo(() => {
@@ -1082,6 +1085,15 @@ export default function App() {
                     />
                   </div>
                   <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Email</Label>
+                    <Input 
+                      value={profile.email}
+                      onChange={e => setProfile(p => ({ ...p, email: e.target.value }))}
+                      placeholder="your@email.com"
+                      className="bg-black border-zinc-800 text-white focus:ring-orange-500 rounded-xl max-w-sm"
+                    />
+                  </div>
+                  <div className="space-y-3">
                     <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Other Details</Label>
                     <textarea 
                       value={profile.details}
@@ -1479,10 +1491,12 @@ export default function App() {
 function Login({ onLogin }: { onLogin: () => void }) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [requires2FA, setRequires2FA] = useState(false);
+  const [setupData, setSetupData] = useState<{qr: string, secret: string} | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const [showDebug, setShowDebug] = useState(false);
   const [loginError, setLoginError] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -1490,132 +1504,208 @@ function Login({ onLogin }: { onLogin: () => void }) {
     setLoading(true);
     setLoginError(null);
     
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
     try {
-      console.log(`[LOGIN] Sending: User(${username.trim()}), PassLength(${password.trim().length})`);
-      
-      const res = await fetch('/api/login', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Accept': 'application/json'
-        },
-        body: JSON.stringify({ username: username.trim(), password: password.trim() }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      const contentType = res.headers.get("content-type");
-      if (!contentType || !contentType.includes("application/json")) {
-        const text = await res.text();
-        console.error('[LOGIN] Expected JSON but got:', contentType, text.substring(0, 100));
-        throw new Error(`Backend API is unreachable. The server might be starting up, or running in static mode. Please use the Force Bypass button below. Status: ${res.status}`);
-      }
-
-      if (res.ok) {
+      if (!requires2FA && !setupData) {
+        const res = await fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: username.trim(), password: password.trim() }),
+        });
+        
         const data = await res.json();
-        localStorage.setItem('nic_token', data.token);
-        onLogin();
-        toast.success('Welcome back, Nic!');
+        
+        if (res.ok) {
+          if (data.requiresSetup) {
+            setSetupData({ qr: data.qrCode, secret: data.secret });
+            toast.info('Security setup required');
+          } else if (data.requires2FA) {
+            setRequires2FA(true);
+            toast.info('Authenticator code required');
+          } else {
+            localStorage.setItem('nic_token', data.token);
+            onLogin();
+            toast.success('Welcome back!');
+          }
+        } else {
+          setLoginError(data.error || 'Login failed');
+        }
       } else {
-        let errorMsg = `Server returned status ${res.status}`;
-        try {
-          const data = await res.json();
-          errorMsg = data.error || errorMsg;
-        } catch (e) {}
-        setLoginError(errorMsg);
-        toast.error(errorMsg);
+        const res = await fetch('/api/verify-2fa', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            username: username.trim(), 
+            otp: otp.trim(),
+            secret: setupData?.secret,
+            isSetup: !!setupData
+          }),
+        });
+        
+        const data = await res.json();
+        
+        if (res.ok) {
+          localStorage.setItem('nic_token', data.token);
+          onLogin();
+          toast.success(setupData ? 'Security paired successfully!' : 'Security verified. Welcome!');
+        } else {
+          setLoginError(data.error || 'Verification failed');
+        }
       }
     } catch (err: any) {
-      clearTimeout(timeoutId);
-      console.error('[LOGIN] Exception:', err);
-      
-      let errMsg = err.message || 'Unknown error';
-      if (err.name === 'AbortError') {
-        errMsg = 'Connection timeout. The server is taking too long to respond. Is the Node server running?';
-      } else if (err.message.includes('Failed to fetch')) {
-        errMsg = 'Network error. The server might be down or blocking the request.';
-      }
-      
-      setLoginError(errMsg);
-      toast.error(errMsg);
+      setLoginError('Connection error. Is the server running?');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-black p-4">
+    <div className="min-h-screen flex items-center justify-center bg-black p-4 text-white">
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
         className="w-full max-w-md"
       >
         <Card className="border-zinc-800 bg-zinc-900 shadow-2xl overflow-hidden orange-glow">
-          <CardHeader className="bg-black text-white p-10 text-center border-b border-zinc-800">
+          <CardHeader className="bg-black text-white p-8 text-center border-b border-zinc-800">
             <div className="w-16 h-16 bg-orange-500 text-white rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-orange-500/20">
-              <Clock className="w-8 h-8" />
+              {setupData ? <ShieldPlus className="w-8 h-8" /> : (requires2FA ? <ShieldCheck className="w-8 h-8" /> : <Clock className="w-8 h-8" />)}
             </div>
-            <CardTitle className="text-3xl font-black tracking-tighter uppercase">TimeTrack Pro</CardTitle>
-            <CardDescription className="text-zinc-500 mt-2 font-bold uppercase tracking-widest text-[10px]">Secure Authentication Required</CardDescription>
+            <CardTitle className="text-3xl font-black tracking-tighter uppercase">
+              {setupData ? 'Initial Pairing' : 'TimeTrack Pro'}
+            </CardTitle>
+            <CardDescription className="text-zinc-500 mt-2 font-bold uppercase tracking-widest text-[10px]">
+              {setupData ? 'Set up Authenticator' : (requires2FA ? 'Identity Verification' : 'Secure Authentication')}
+            </CardDescription>
           </CardHeader>
-          <CardContent className="p-10 bg-zinc-900">
+          <CardContent className="p-8 bg-zinc-900 border-b border-zinc-800/50">
             <form onSubmit={handleSubmit} className="space-y-6" autoComplete="off">
-              <div className="space-y-3">
-                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Username</Label>
-                <Input 
-                  required
-                  autoComplete="off"
-                  value={username}
-                  onChange={e => setUsername(e.target.value)}
-                  placeholder="Enter username"
-                  className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 focus:border-orange-500 rounded-xl"
-                />
-              </div>
-              <div className="space-y-3">
-                <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Password</Label>
-                <div className="relative">
-                  <Input 
-                    type={showPassword ? "text" : "password"}
-                    required
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={e => setPassword(e.target.value)}
-                    placeholder="Enter password"
-                    className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 focus:border-orange-500 rounded-xl pr-12"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-orange-500 transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+              {!requires2FA && !setupData ? (
+                <>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">System Alias</Label>
+                    <Input 
+                      required
+                      autoComplete="off"
+                      value={username}
+                      onChange={e => setUsername(e.target.value)}
+                      placeholder="Username"
+                      className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 focus:border-orange-500 rounded-xl"
+                    />
+                  </div>
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Security Key</Label>
+                    <div className="relative">
+                      <Input 
+                        type={showPassword ? "text" : "password"}
+                        required
+                        autoComplete="new-password"
+                        value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder="Password"
+                        className="h-14 bg-black border-zinc-800 text-white focus:ring-orange-500 focus:border-orange-500 rounded-xl pr-12"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-orange-500 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
+                  </div>
+                </>
+              ) : setupData ? (
+                <div className="space-y-6 text-center">
+                  <div className="bg-white p-4 rounded-2xl mx-auto w-fit shadow-2xl">
+                    <img src={setupData.qr} alt="Scan me" className="w-48 h-48" />
+                  </div>
+                  <div className="space-y-3">
+                    <p className="text-xs text-zinc-400 font-bold uppercase tracking-widest leading-relaxed">
+                      1. Open Google or Microsoft Authenticator<br/>
+                      2. Scan the QR code or <span className="text-orange-500">Manual Entry</span>
+                    </p>
+                    
+                    <div className="p-4 bg-black/50 border border-zinc-800 rounded-xl space-y-2">
+                       <p className="text-[10px] text-zinc-500 font-black uppercase tracking-widest">Your Setup Key</p>
+                       <div className="flex items-center justify-between gap-4">
+                          <code className="text-sm font-mono text-orange-400 bg-orange-500/5 px-2 py-1 rounded truncate flex-1 block text-left">
+                            {setupData.secret}
+                          </code>
+                          <Button 
+                            type="button" 
+                            variant="ghost" 
+                            size="icon" 
+                            className="h-8 w-8 text-zinc-500 hover:text-white"
+                            onClick={() => {
+                              navigator.clipboard.writeText(setupData.secret);
+                              toast.success('Key copied to clipboard');
+                            }}
+                          >
+                             <Copy className="w-4 h-4" />
+                          </Button>
+                       </div>
+                    </div>
+
+                    <Input 
+                      required
+                      autoFocus
+                      value={otp}
+                      onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="Enter 6-digit code"
+                      className="h-14 bg-black border-zinc-800 text-white text-center text-3xl font-black tracking-[0.5em] focus:ring-orange-500 focus:border-orange-500 rounded-xl"
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <Label className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">Authenticator Code</Label>
+                    <Input 
+                      required
+                      autoFocus
+                      value={otp}
+                      onChange={e => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      placeholder="000000"
+                      className="h-14 bg-black border-zinc-800 text-white text-center text-3xl font-black tracking-[0.5em] focus:ring-orange-500 focus:border-orange-500 rounded-xl"
+                    />
+                    <p className="text-[9px] text-orange-500 font-black uppercase tracking-[0.2em] text-center mt-4">
+                      Protection: Two-Factor Enabled
+                    </p>
+                  </div>
+                </div>
+              )}
+              
               <Button 
                 type="submit" 
                 disabled={loading}
                 className="w-full h-14 bg-orange-500 text-white hover:bg-orange-600 rounded-xl font-black text-lg tracking-tight transition-all active:scale-[0.98] shadow-lg shadow-orange-500/20 uppercase"
               >
-                {loading ? 'Authenticating...' : 'Sign In'}
+                {loading ? 'Processing...' : (setupData ? 'Confirm Pairing' : (requires2FA ? 'Verify Identity' : 'Log In'))}
               </Button>
+
+              {(requires2FA || setupData) && (
+                <button 
+                  type="button" 
+                  onClick={() => { setRequires2FA(false); setSetupData(null); setOtp(''); }}
+                  className="w-full text-zinc-600 hover:text-white text-[9px] font-black uppercase tracking-[0.3em] transition-colors"
+                >
+                  Return to gateway
+                </button>
+              )}
             </form>
 
             {loginError && (
-              <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-left">
-                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Login Failed</p>
-                <p className="text-xs text-red-400 font-medium">{loginError}</p>
+              <div className="mt-8 p-4 bg-red-500/5 border border-red-500/10 rounded-xl text-left animate-in fade-in slide-in-from-top-2">
+                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Alert</p>
+                <p className="text-[11px] text-red-300 font-medium leading-relaxed italic">{loginError}</p>
               </div>
             )}
           </CardContent>
-          <div className="p-6 bg-black border-t border-zinc-800 text-center">
-            <p className="text-[10px] text-zinc-600 font-bold uppercase tracking-[0.3em]">
-              System Version 2.2.0
-            </p>
+          <div className="p-6 bg-black text-center">
+             <div className="flex items-center justify-center gap-1.5 grayscale opacity-30 brightness-150">
+               <ShieldCheck className="w-3 h-3" />
+               <p className="text-[9px] font-black uppercase tracking-[0.3em]">End-to-End Encryption Enabled</p>
+             </div>
           </div>
         </Card>
       </motion.div>

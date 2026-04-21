@@ -26,7 +26,7 @@ async function startServer() {
   });
 
   // Login route - MOVED TO TOP LEVEL for maximum reliability
-  app.post('/api/login', (req, res) => {
+  app.post('/api/login', async (req, res) => {
     console.log('[LOGIN] Raw Body:', req.body);
     const { username, password } = req.body || {};
     

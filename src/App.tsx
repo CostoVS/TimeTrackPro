@@ -1706,6 +1706,9 @@ function Login({ onLogin }: { onLogin: () => void }) {
                <ShieldCheck className="w-3 h-3" />
                <p className="text-[9px] font-black uppercase tracking-[0.3em]">End-to-End Encryption Enabled</p>
              </div>
+             <p className="text-[8px] text-zinc-700 font-bold uppercase tracking-[0.2em] mt-2">
+               System v3.2.0 Security Core
+             </p>
           </div>
         </Card>
       </motion.div>

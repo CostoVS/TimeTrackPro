@@ -20,12 +20,149 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  // Database setup - MOVE TO TOP
+  let db: any;
+  const isPostgres = !!process.env.DATABASE_URL;
+
+  async function initializeDatabase(database: any, postgres: boolean) {
+    if (postgres) {
+      await database.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id SERIAL PRIMARY KEY,
+          date TEXT NOT NULL,
+          clock_in TEXT,
+          tea_out TEXT,
+          tea_in TEXT,
+          lunch_out TEXT,
+          lunch_in TEXT,
+          clock_out TEXT,
+          total_hours REAL DEFAULT 0,
+          status TEXT DEFAULT 'idle',
+          leave_type TEXT,
+          is_paid BOOLEAN DEFAULT TRUE,
+          leave_hours REAL DEFAULT 0,
+          notes TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
+
+        CREATE TABLE IF NOT EXISTS documents (
+          id SERIAL PRIMARY KEY,
+          type TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          original_name TEXT NOT NULL,
+          mime_type TEXT,
+          upload_date TEXT NOT NULL,
+          description TEXT
+        );
+        CREATE TABLE IF NOT EXISTS system_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        );
+      `);
+    } else {
+      await database.exec(`
+        CREATE TABLE IF NOT EXISTS sessions (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          date TEXT NOT NULL,
+          clock_in TEXT,
+          tea_out TEXT,
+          tea_in TEXT,
+          lunch_out TEXT,
+          lunch_in TEXT,
+          clock_out TEXT,
+          total_hours REAL DEFAULT 0,
+          status TEXT DEFAULT 'idle',
+          leave_type TEXT,
+          is_paid INTEGER DEFAULT 1,
+          leave_hours REAL DEFAULT 0,
+          notes TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
+
+        CREATE TABLE IF NOT EXISTS documents (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          type TEXT NOT NULL,
+          filename TEXT NOT NULL,
+          original_name TEXT NOT NULL,
+          mime_type TEXT,
+          upload_date TEXT NOT NULL,
+          description TEXT
+        );
+        CREATE TABLE IF NOT EXISTS system_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT
+        );
+      `);
+
+      // SQLite Migration: Add missing columns if table already existed
+      const columns = await database.all("PRAGMA table_info(sessions)");
+      const columnNames = columns.map((c: any) => c.name);
+      const migrations = [
+        { name: 'tea_out', type: 'TEXT' },
+        { name: 'tea_in', type: 'TEXT' },
+        { name: 'lunch_out', type: 'TEXT' },
+        { name: 'lunch_in', type: 'TEXT' },
+        { name: 'status', type: "TEXT DEFAULT 'idle'" },
+        { name: 'leave_type', type: 'TEXT' },
+        { name: 'is_paid', type: 'INTEGER DEFAULT 1' },
+        { name: 'leave_hours', type: 'REAL DEFAULT 0' },
+        { name: 'notes', type: 'TEXT' }
+      ];
+      
+      for (const m of migrations) {
+        if (!columnNames.includes(m.name)) {
+          console.log(`Migrating SQLite: Adding column ${m.name}`);
+          await database.exec(`ALTER TABLE sessions ADD COLUMN ${m.name} ${m.type}`);
+        }
+      }
+    }
+  }
+
+  try {
+    if (isPostgres) {
+      console.log('Attempting to connect to Postgres...');
+      const pool = new Pool({ 
+        connectionString: process.env.DATABASE_URL,
+        connectionTimeoutMillis: 5000 
+      });
+      db = {
+        exec: async (sql: string) => await pool.query(sql),
+        all: async (sql: string, params: any[] = []) => (await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params)).rows,
+        get: async (sql: string, params: any[] = []) => (await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params)).rows[0],
+        run: async (sql: string, params: any[] = []) => await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params),
+      };
+      // Test connection
+      await pool.query('SELECT 1');
+      console.log('Postgres connected successfully');
+    } else {
+      console.log('Using SQLite database');
+      db = await open({
+        filename: './database.sqlite',
+        driver: sqlite3.Database
+      });
+    }
+
+    await initializeDatabase(db, isPostgres);
+    console.log('Database tables initialized');
+  } catch (err) {
+    console.error('Database initialization failed:', err);
+    // Fallback to SQLite if Postgres fails to prevent boot hang
+    if (isPostgres) {
+      console.log('Falling back to SQLite due to Postgres error');
+      db = await open({
+        filename: './database.sqlite',
+        driver: sqlite3.Database
+      });
+      await initializeDatabase(db, false);
+    }
+  }
+
   // Health check
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok', time: new Date().toISOString() });
   });
 
-  // Login route - MOVED TO TOP LEVEL for maximum reliability
+  // Login route - Now safe because db is initialized
   app.post('/api/login', async (req, res) => {
     console.log('[LOGIN] Raw Body:', req.body);
     const { username, password } = req.body || {};
@@ -121,140 +258,6 @@ async function startServer() {
       expected_pass_length: 'Nic6604211989!'.length
     });
   });
-
-  // Database setup
-  let db: any;
-  const isPostgres = !!process.env.DATABASE_URL;
-
-  async function initializeDatabase(database: any, postgres: boolean) {
-    if (postgres) {
-      await database.exec(`
-        CREATE TABLE IF NOT EXISTS sessions (
-          id SERIAL PRIMARY KEY,
-          date TEXT NOT NULL,
-          clock_in TEXT,
-          tea_out TEXT,
-          tea_in TEXT,
-          lunch_out TEXT,
-          lunch_in TEXT,
-          clock_out TEXT,
-          total_hours REAL DEFAULT 0,
-          status TEXT DEFAULT 'idle',
-          leave_type TEXT,
-          is_paid BOOLEAN DEFAULT TRUE,
-          leave_hours REAL DEFAULT 0,
-          notes TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
-
-        CREATE TABLE IF NOT EXISTS documents (
-          id SERIAL PRIMARY KEY,
-          type TEXT NOT NULL,
-          filename TEXT NOT NULL,
-          original_name TEXT NOT NULL,
-          mime_type TEXT,
-          upload_date TEXT NOT NULL,
-          description TEXT
-        );
-        CREATE TABLE IF NOT EXISTS system_settings (
-          key TEXT PRIMARY KEY,
-          value TEXT
-        );
-      `);
-    } else {
-      await database.exec(`
-        CREATE TABLE IF NOT EXISTS sessions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          date TEXT NOT NULL,
-          clock_in TEXT,
-          tea_out TEXT,
-          tea_in TEXT,
-          lunch_out TEXT,
-          lunch_in TEXT,
-          clock_out TEXT,
-          total_hours REAL DEFAULT 0,
-          status TEXT DEFAULT 'idle',
-          leave_type TEXT,
-          is_paid INTEGER DEFAULT 1,
-          leave_hours REAL DEFAULT 0,
-          notes TEXT
-        );
-        CREATE INDEX IF NOT EXISTS idx_sessions_date ON sessions(date);
-
-        CREATE TABLE IF NOT EXISTS documents (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          type TEXT NOT NULL,
-          filename TEXT NOT NULL,
-          original_name TEXT NOT NULL,
-          mime_type TEXT,
-          upload_date TEXT NOT NULL,
-          description TEXT
-        );
-        CREATE TABLE IF NOT EXISTS system_settings (
-          key TEXT PRIMARY KEY,
-          value TEXT
-        );
-      `);
-
-      // SQLite Migration: Add missing columns if table already existed
-      const columns = await database.all("PRAGMA table_info(sessions)");
-      const columnNames = columns.map((c: any) => c.name);
-      
-      const migrations = [
-        { name: 'leave_type', type: 'TEXT' },
-        { name: 'is_paid', type: 'INTEGER DEFAULT 1' },
-        { name: 'leave_hours', type: 'REAL DEFAULT 0' },
-        { name: 'notes', type: 'TEXT' }
-      ];
-
-      for (const m of migrations) {
-        if (!columnNames.includes(m.name)) {
-          console.log(`Migrating SQLite: Adding column ${m.name}`);
-          await database.exec(`ALTER TABLE sessions ADD COLUMN ${m.name} ${m.type}`);
-        }
-      }
-    }
-  }
-
-  try {
-    if (isPostgres) {
-      console.log('Attempting to connect to Postgres...');
-      const pool = new Pool({ 
-        connectionString: process.env.DATABASE_URL,
-        connectionTimeoutMillis: 5000 
-      });
-      db = {
-        exec: async (sql: string) => await pool.query(sql),
-        all: async (sql: string, params: any[] = []) => (await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params)).rows,
-        get: async (sql: string, params: any[] = []) => (await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params)).rows[0],
-        run: async (sql: string, params: any[] = []) => await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params),
-      };
-      // Test connection
-      await pool.query('SELECT 1');
-      console.log('Postgres connected successfully');
-    } else {
-      console.log('Using SQLite database');
-      db = await open({
-        filename: './database.sqlite',
-        driver: sqlite3.Database
-      });
-    }
-
-    await initializeDatabase(db, isPostgres);
-    console.log('Database tables initialized');
-  } catch (err) {
-    console.error('Database initialization failed:', err);
-    // Fallback to SQLite if Postgres fails to prevent boot hang
-    if (isPostgres) {
-      console.log('Falling back to SQLite due to Postgres error');
-      db = await open({
-        filename: './database.sqlite',
-        driver: sqlite3.Database
-      });
-      await initializeDatabase(db, false);
-      console.log('Fallback SQLite tables initialized');
-    }
-  }
 
   // Multer setup
   const uploadDir = path.join(process.cwd(), 'uploads');

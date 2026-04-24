@@ -125,6 +125,8 @@ const MOTIVATIONS = [
   { text: "Don't stop when you're tired. Stop when you're done.", author: "David Goggins" }
 ];
 
+export const formatTime = (val: string | null | undefined): string => { if (!val) return '--:--'; if (val.includes('T')) { try { return format(parseISO(val), 'HH:mm'); } catch { return '--:--'; } } if (val.includes(' ')) return val.split(' ')[1].slice(0, 5); return val.slice(0, 5); };
+
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('nic_token'));
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -488,8 +490,8 @@ export default function App() {
     const tableData = filteredSessions.map(s => [
       format(parseISO(s.date), 'dd MMM (EEE)'),
       s.leave_type ? LEAVE_TYPES.find(l => l.id === s.leave_type)?.label : 'Work',
-      s.clock_in ? format(parseISO(s.clock_in), 'HH:mm') : '-',
-      s.clock_out ? format(parseISO(s.clock_out), 'HH:mm') : '-',
+      s.clock_in ? formatTime(s.clock_in) : '-',
+      s.clock_out ? formatTime(s.clock_out) : '-',
       s.total_hours.toFixed(2),
       s.notes || '-'
     ]);
@@ -800,7 +802,7 @@ export default function App() {
                             {item.label}
                           </span>
                           <span className="text-sm font-bold font-mono text-zinc-300">
-                            {item.val ? format(parseISO(item.val), 'HH:mm') : '--:--'}
+                            {item.val ? formatTime(item.val) : '--:--'}
                           </span>
                         </div>
                       ))}
@@ -824,7 +826,7 @@ export default function App() {
                         {format(parseISO(upcomingFutureShifts[0].date), 'dd MMM yyyy')}
                       </div>
                       <div className="text-xs font-bold text-zinc-400 mt-1 uppercase tracking-widest">
-                        {upcomingFutureShifts[0].clock_in ? format(parseISO(upcomingFutureShifts[0].clock_in), 'HH:mm') : '--:--'} - {upcomingFutureShifts[0].clock_out ? format(parseISO(upcomingFutureShifts[0].clock_out), 'HH:mm') : '--:--'}
+                        {upcomingFutureShifts[0].clock_in ? formatTime(upcomingFutureShifts[0].clock_in) : '--:--'} - {upcomingFutureShifts[0].clock_out ? formatTime(upcomingFutureShifts[0].clock_out) : '--:--'}
                       </div>
                     </CardContent>
                   </Card>
@@ -885,11 +887,11 @@ export default function App() {
                         <div className="flex items-center gap-4">
                           <div className="flex flex-col">
                             <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">In</span>
-                            <span className="font-mono text-xs text-zinc-300">{s.clock_in ? format(parseISO(s.clock_in), 'HH:mm') : '--:--'}</span>
+                            <span className="font-mono text-xs text-zinc-300">{s.clock_in ? formatTime(s.clock_in) : '--:--'}</span>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[9px] text-zinc-600 font-bold uppercase tracking-widest">Out</span>
-                            <span className="font-mono text-xs text-zinc-300">{s.clock_out ? format(parseISO(s.clock_out), 'HH:mm') : '--:--'}</span>
+                            <span className="font-mono text-xs text-zinc-300">{s.clock_out ? formatTime(s.clock_out) : '--:--'}</span>
                           </div>
                         </div>
                         <div className="flex flex-col items-end sm:pl-4">
@@ -955,19 +957,19 @@ export default function App() {
                         <div className="grid grid-cols-2 gap-2 bg-black/50 p-3 rounded-lg border border-zinc-800/50">
                           <div className="flex flex-col">
                             <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">In</span>
-                            <span className="font-mono text-sm text-zinc-300">{s.clock_in ? format(parseISO(s.clock_in), 'HH:mm') : '--:--'}</span>
+                            <span className="font-mono text-sm text-zinc-300">{s.clock_in ? formatTime(s.clock_in) : '--:--'}</span>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Out</span>
-                            <span className="font-mono text-sm text-zinc-300">{s.clock_out ? format(parseISO(s.clock_out), 'HH:mm') : '--:--'}</span>
+                            <span className="font-mono text-sm text-zinc-300">{s.clock_out ? formatTime(s.clock_out) : '--:--'}</span>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Tea</span>
-                            <span className="font-mono text-[10px] text-zinc-500">{s.tea_out ? `${format(parseISO(s.tea_out), 'HH:mm')} - ${s.tea_in ? format(parseISO(s.tea_in), 'HH:mm') : '...'}` : '--:--'}</span>
+                            <span className="font-mono text-[10px] text-zinc-500">{s.tea_out ? `${formatTime(s.tea_out)} - ${s.tea_in ? formatTime(s.tea_in) : '...'}` : '--:--'}</span>
                           </div>
                           <div className="flex flex-col">
                             <span className="text-[9px] font-bold text-zinc-600 uppercase tracking-widest">Lunch</span>
-                            <span className="font-mono text-[10px] text-zinc-500">{s.lunch_out ? `${format(parseISO(s.lunch_out), 'HH:mm')} - ${s.lunch_in ? format(parseISO(s.lunch_in), 'HH:mm') : '...'}` : '--:--'}</span>
+                            <span className="font-mono text-[10px] text-zinc-500">{s.lunch_out ? `${formatTime(s.lunch_out)} - ${s.lunch_in ? formatTime(s.lunch_in) : '...'}` : '--:--'}</span>
                           </div>
                         </div>
 
@@ -1387,7 +1389,7 @@ export default function App() {
                     </Label>
                     <Input 
                       type="time" 
-                      value={editingSession?.clock_in ? (editingSession.clock_in.includes('T') ? format(parseISO(editingSession.clock_in), 'HH:mm') : editingSession.clock_in) : ''}
+                      value={editingSession?.clock_in ? (editingSession.clock_in.includes('T') ? formatTime(editingSession.clock_in) : editingSession.clock_in) : ''}
                       onChange={e => {
                         const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                         setEditingSession({ ...editingSession, clock_in: `${date}T${e.target.value}:00` });
@@ -1401,7 +1403,7 @@ export default function App() {
                     </Label>
                     <Input 
                       type="time" 
-                      value={editingSession?.clock_out ? (editingSession.clock_out.includes('T') ? format(parseISO(editingSession.clock_out), 'HH:mm') : editingSession.clock_out) : ''}
+                      value={editingSession?.clock_out ? (editingSession.clock_out.includes('T') ? formatTime(editingSession.clock_out) : editingSession.clock_out) : ''}
                       onChange={e => {
                         const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                         setEditingSession({ ...editingSession, clock_out: `${date}T${e.target.value}:00` });
@@ -1416,7 +1418,7 @@ export default function App() {
                     <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Tea Out (Start)</Label>
                     <Input 
                       type="time" 
-                      value={editingSession?.tea_out ? (editingSession.tea_out.includes('T') ? format(parseISO(editingSession.tea_out), 'HH:mm') : editingSession.tea_out) : ''}
+                      value={editingSession?.tea_out ? (editingSession.tea_out.includes('T') ? formatTime(editingSession.tea_out) : editingSession.tea_out) : ''}
                       onChange={e => {
                         const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                         setEditingSession({ ...editingSession, tea_out: e.target.value ? `${date}T${e.target.value}:00` : null });
@@ -1428,7 +1430,7 @@ export default function App() {
                     <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Tea In (End)</Label>
                     <Input 
                       type="time" 
-                      value={editingSession?.tea_in ? (editingSession.tea_in.includes('T') ? format(parseISO(editingSession.tea_in), 'HH:mm') : editingSession.tea_in) : ''}
+                      value={editingSession?.tea_in ? (editingSession.tea_in.includes('T') ? formatTime(editingSession.tea_in) : editingSession.tea_in) : ''}
                       onChange={e => {
                         const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                         setEditingSession({ ...editingSession, tea_in: e.target.value ? `${date}T${e.target.value}:00` : null });
@@ -1440,7 +1442,7 @@ export default function App() {
                     <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Lunch Out (Start)</Label>
                     <Input 
                       type="time" 
-                      value={editingSession?.lunch_out ? (editingSession.lunch_out.includes('T') ? format(parseISO(editingSession.lunch_out), 'HH:mm') : editingSession.lunch_out) : ''}
+                      value={editingSession?.lunch_out ? (editingSession.lunch_out.includes('T') ? formatTime(editingSession.lunch_out) : editingSession.lunch_out) : ''}
                       onChange={e => {
                         const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                         setEditingSession({ ...editingSession, lunch_out: e.target.value ? `${date}T${e.target.value}:00` : null });
@@ -1452,7 +1454,7 @@ export default function App() {
                     <Label className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500">Lunch In (End)</Label>
                     <Input 
                       type="time" 
-                      value={editingSession?.lunch_in ? (editingSession.lunch_in.includes('T') ? format(parseISO(editingSession.lunch_in), 'HH:mm') : editingSession.lunch_in) : ''}
+                      value={editingSession?.lunch_in ? (editingSession.lunch_in.includes('T') ? formatTime(editingSession.lunch_in) : editingSession.lunch_in) : ''}
                       onChange={e => {
                         const date = editingSession?.date || format(new Date(), 'yyyy-MM-dd');
                         setEditingSession({ ...editingSession, lunch_in: e.target.value ? `${date}T${e.target.value}:00` : null });

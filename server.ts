@@ -1,8 +1,13 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import sqlite3 from 'sqlite3';
 import { open, Database as SQLiteDatabase } from 'sqlite';
 import pg from 'pg';
+
+// Force pg to return strings for DATE (1082) and TIMESTAMP (1114) to maintain compatibility with SQLite string columns
+pg.types.setTypeParser(1082, (val) => val);
+pg.types.setTypeParser(1114, (val) => val);
 import path from 'path';
 import fs from 'fs';
 import multer from 'multer';
@@ -22,7 +27,8 @@ async function startServer() {
 
   // Database setup - MOVE TO TOP
   let db: any;
-  const isPostgres = !!process.env.DATABASE_URL;
+  const dbUrl = process.env.DATABASE_URL || "dbname=timetrack user=timetrack password=password host=localhost";
+  const isPostgres = true; // Force Postgres via the same env/fallback as python
 
   async function initializeDatabase(database: any, postgres: boolean) {
     if (postgres) {
@@ -121,15 +127,26 @@ async function startServer() {
   try {
     if (isPostgres) {
       console.log('Attempting to connect to Postgres...');
-      const pool = new Pool({ 
-        connectionString: process.env.DATABASE_URL,
-        connectionTimeoutMillis: 5000 
-      });
+      const poolConfig: any = { connectionTimeoutMillis: 5000 };
+      if (dbUrl.includes('://')) {
+        poolConfig.connectionString = dbUrl;
+      } else {
+        const parts = dbUrl.split(' ');
+        for (const p of parts) {
+          const [k, v] = p.split('=');
+          if (k === 'dbname') poolConfig.database = v;
+          if (k === 'user') poolConfig.user = v;
+          if (k === 'password') poolConfig.password = v;
+          if (k === 'host') poolConfig.host = v;
+          if (k === 'port') poolConfig.port = parseInt(v, 10);
+        }
+      }
+      const pool = new Pool(poolConfig);
       db = {
         exec: async (sql: string) => await pool.query(sql),
-        all: async (sql: string, params: any[] = []) => (await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params)).rows,
-        get: async (sql: string, params: any[] = []) => (await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params)).rows[0],
-        run: async (sql: string, params: any[] = []) => await pool.query(sql.replace(/\?/g, (_, i) => `$${i + 1}`), params),
+        all: async (sql: string, params: any[] = []) => { let c = 1; return (await pool.query(sql.replace(/\?/g, () => `$${c++}`), params)).rows; },
+        get: async (sql: string, params: any[] = []) => { let c = 1; return (await pool.query(sql.replace(/\?/g, () => `$${c++}`), params)).rows[0]; },
+        run: async (sql: string, params: any[] = []) => { let c = 1; return await pool.query(sql.replace(/\?/g, () => `$${c++}`), params); },
       };
       // Test connection
       await pool.query('SELECT 1');

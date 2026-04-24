@@ -28,7 +28,7 @@ async function startServer() {
   // Database setup - MOVE TO TOP
   let db: any;
   const dbUrl = process.env.DATABASE_URL || "dbname=timetrack user=timetrack password=password host=localhost";
-  const isPostgres = true; // Force Postgres via the same env/fallback as python
+  let isPostgres = true; // Force Postgres via the same env/fallback as python
 
   async function initializeDatabase(database: any, postgres: boolean) {
     if (postgres) {
@@ -166,6 +166,7 @@ async function startServer() {
     // Fallback to SQLite if Postgres fails to prevent boot hang
     if (isPostgres) {
       console.log('Falling back to SQLite due to Postgres error');
+      isPostgres = false;
       db = await open({
         filename: './database.sqlite',
         driver: sqlite3.Database
@@ -349,49 +350,56 @@ async function startServer() {
   });
 
   router.post('/sessions/action', async (req, res) => {
-    const { action, timestamp, clientDate } = req.body;
-    const today = clientDate || new Date().toISOString().split('T')[0];
-    const ts = timestamp || new Date().toISOString();
+    try {
+      const { action, timestamp, clientDate } = req.body;
+      const today = clientDate || new Date().toISOString().split('T')[0];
+      const ts = timestamp || new Date().toISOString();
 
-    console.log(`[ACTION] ${action} on ${today} at ${ts}`);
+      console.log(`[ACTION] ${action} on ${today} at ${ts}`);
 
-    let session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
+      let session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
+      console.log(`[ACTION] Existing session found:`, session);
 
-    if (action === 'clock_in') {
-      if (session) {
-        await db.run('UPDATE sessions SET clock_in = ?, status = ? WHERE id = ?', [ts, 'working', session.id]);
+      if (action === 'clock_in') {
+        if (session) {
+          console.log(`[ACTION] Updating existing session id=${session.id} with clock_in=${ts}`);
+          await db.run('UPDATE sessions SET clock_in = ?, status = ? WHERE id = ?', [ts, 'working', session.id]);
+        } else {
+          console.log(`[ACTION] Inserting new session with clock_in=${ts}`);
+          await db.run('INSERT INTO sessions (date, clock_in, status) VALUES (?, ?, ?)', [today, ts, 'working']);
+        }
+      } else if (action === 'clock_out') {
+        if (session) {
+          await db.run('UPDATE sessions SET clock_out = ?, status = ? WHERE id = ?', [ts, 'idle', session.id]);
+        }
       } else {
-        await db.run('INSERT INTO sessions (date, clock_in, status) VALUES (?, ?, ?)', [today, ts, 'working']);
+        if (!session) {
+          await db.run(`INSERT INTO sessions (date, ${action}, status) VALUES (?, ?, ?)`, [today, ts, getStatusForAction(action)]);
+        } else {
+          await db.run(`UPDATE sessions SET ${action} = ?, status = ? WHERE id = ?`, [ts, getStatusForAction(action), session.id]);
+        }
       }
-    } else if (action === 'clock_out') {
-      if (session) {
-        await db.run('UPDATE sessions SET clock_out = ?, status = ? WHERE id = ?', [ts, 'idle', session.id]);
-      }
-    } else {
-      if (!session) {
-        // Create session if it doesn't exist (e.g. forgot to clock in)
-        await db.run(`INSERT INTO sessions (date, ${action}, status) VALUES (?, ?, ?)`, [today, ts, getStatusForAction(action)]);
+
+      // Refresh session to calculate hours
+      const currentSession = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
+      if (currentSession) {
+        const total = calculateHours(currentSession);
+        await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, currentSession.id]);
       } else {
-        await db.run(`UPDATE sessions SET ${action} = ?, status = ? WHERE id = ?`, [ts, getStatusForAction(action), session.id]);
+        const lastSession = await db.get('SELECT * FROM sessions WHERE date = ? ORDER BY id DESC LIMIT 1', [today]);
+        if (lastSession) {
+          const total = calculateHours(lastSession);
+          await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, lastSession.id]);
+        }
       }
-    }
 
-    // Refresh session to calculate hours
-    const currentSession = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
-    if (currentSession) {
-      const total = calculateHours(currentSession);
-      await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, currentSession.id]);
-    } else {
-      // If we just clocked out, update the session we just closed
-      const lastSession = await db.get('SELECT * FROM sessions WHERE date = ? ORDER BY id DESC LIMIT 1', [today]);
-      if (lastSession) {
-        const total = calculateHours(lastSession);
-        await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, lastSession.id]);
-      }
+      const updated = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
+      console.log(`[ACTION] Action completed. Updated session:`, updated);
+      res.json(updated || { status: 'idle' });
+    } catch (err) {
+      console.error('[ACTION ERROR]', err);
+      res.status(500).json({ error: 'Internal Server Error' });
     }
-
-    const updated = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
-    res.json(updated || { status: 'idle' });
   });
 
   router.post('/sessions', async (req, res) => {

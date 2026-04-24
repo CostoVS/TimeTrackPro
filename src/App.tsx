@@ -358,6 +358,10 @@ export default function App() {
           clientDate: format(new Date(), 'yyyy-MM-dd')
         }),
       });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt);
+      }
       const data = await res.json();
       setCurrentSession(data.status === 'idle' ? null : data);
       fetchSessions();
@@ -565,7 +569,7 @@ export default function App() {
     return `${h > 0 ? h + ':' : ''}${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const currentStatus = currentSession?.status || 'idle';
+  const currentStatus = (currentSession?.clock_in) ? (currentSession.status || 'idle') : 'idle';
 
   return (
     <div className="min-h-screen bg-black">

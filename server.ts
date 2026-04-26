@@ -344,7 +344,7 @@ async function startServer() {
   });
 
   router.get('/sessions/current', async (req, res) => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = req.query.date ? String(req.query.date) : new Date().toISOString().split('T')[0];
     const session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
     res.json(session || null);
   });

@@ -107,6 +107,11 @@ const formatDecimalHours = (decimal: number) => {
   return `${h}h ${m}m`;
 };
 
+const getClientDate = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const MOTIVATIONS = [
   { text: "The future depends on what you do today.", author: "Mahatma Gandhi" },
   { text: "It always seems impossible until it's done.", author: "Nelson Mandela" },
@@ -288,7 +293,8 @@ export default function App() {
 
   const fetchCurrentSession = async () => {
     try {
-      const res = await authenticatedFetch('/api/sessions/current');
+      const dateStr = getClientDate();
+      const res = await authenticatedFetch(`/api/sessions/current?date=${dateStr}`);
       const data = await res.json();
       setCurrentSession(data);
     } catch (err) {
@@ -359,15 +365,15 @@ export default function App() {
         }),
       });
       if (!res.ok) {
-        const txt = await res.text();
-        throw new Error(txt);
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.error || res.statusText || 'Action failed on server');
       }
       const data = await res.json();
-      setCurrentSession(data.status === 'idle' ? null : data);
+      setCurrentSession(data ? (data.status === 'idle' ? null : data) : null);
       fetchSessions();
       toast.success(`Action: ${action.replace('_', ' ')} recorded`);
-    } catch (err) {
-      toast.error('Action failed');
+    } catch (err: any) {
+      toast.error(`Action failed: ${err.message}`);
     }
   };
 
@@ -390,20 +396,28 @@ export default function App() {
         setEditingSession(null);
         fetchSessions();
         fetchCurrentSession();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(`Save Failed: ${errorData.error || res.statusText || 'Unknown error'}`);
       }
-    } catch (err) {
-      toast.error('Save failed');
+    } catch (err: any) {
+      toast.error(`Save failed: ${err.message}`);
     }
   };
 
   const deleteSession = async (id: number) => {
     try {
-      await authenticatedFetch(`/api/sessions/${id}`, { method: 'DELETE' });
-      toast.success('Session deleted');
-      fetchSessions();
-      fetchCurrentSession();
-    } catch (err) {
-      toast.error('Delete failed');
+      const res = await authenticatedFetch(`/api/sessions/${id}`, { method: 'DELETE' });
+      if (res.ok) {
+        toast.success('Session deleted');
+        fetchSessions();
+        fetchCurrentSession();
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast.error(`Delete failed: ${errorData.error || res.statusText}`);
+      }
+    } catch (err: any) {
+      toast.error(`Delete failed: ${err.message}`);
     }
   };
 

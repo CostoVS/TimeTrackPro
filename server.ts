@@ -344,8 +344,8 @@ async function startServer() {
   });
 
   router.get('/sessions/current', async (req, res) => {
-    const today = req.query.date ? String(req.query.date) : new Date().toISOString().split('T')[0];
-    const session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
+    // Return any open session, regardless of date, prioritizing the most recent one
+    const session = await db.get('SELECT * FROM sessions WHERE clock_out IS NULL AND leave_type IS NULL ORDER BY date DESC, clock_in DESC LIMIT 1');
     res.json(session || null);
   });
 
@@ -357,15 +357,27 @@ async function startServer() {
 
       console.log(`[ACTION] ${action} on ${today} at ${ts}`);
 
-      let session = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
-      console.log(`[ACTION] Existing session found:`, session);
+      // Search for ANY open session first. If none, look for a closed session for today that might need reopening.
+      let session = await db.get('SELECT * FROM sessions WHERE clock_out IS NULL AND leave_type IS NULL ORDER BY date DESC, clock_in DESC LIMIT 1');
+      
+      // If we are doing 'clock_in' and there's already an open session, maybe we just want to update it?
+      // Or maybe it's for today specifically.
+      if (!session && action !== 'clock_in') {
+        // Only if it's NOT a clock_in, we might be trying to clock_out of a session that just doesn't show up.
+        // But if there's really no open session, we can't clock out.
+      }
 
       if (action === 'clock_in') {
         if (session) {
-          console.log(`[ACTION] Updating existing session id=${session.id} with clock_in=${ts}`);
-          await db.run('UPDATE sessions SET clock_in = ?, status = ? WHERE id = ?', [ts, 'working', session.id]);
+          if (session.date === today) {
+            await db.run('UPDATE sessions SET clock_in = ?, status = ? WHERE id = ?', [ts, 'working', session.id]);
+          } else {
+            await db.run('UPDATE sessions SET clock_out = ?, status = ? WHERE id = ?', [ts, 'idle', session.id]);
+            const oldFresh = await db.get('SELECT * FROM sessions WHERE id = ?', [session.id]);
+            if (oldFresh) { await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [calculateHours(oldFresh), session.id]); }
+            await db.run('INSERT INTO sessions (date, clock_in, status) VALUES (?, ?, ?)', [today, ts, 'working']);
+          }
         } else {
-          console.log(`[ACTION] Inserting new session with clock_in=${ts}`);
           await db.run('INSERT INTO sessions (date, clock_in, status) VALUES (?, ?, ?)', [today, ts, 'working']);
         }
       } else if (action === 'clock_out') {
@@ -373,29 +385,28 @@ async function startServer() {
           await db.run('UPDATE sessions SET clock_out = ?, status = ? WHERE id = ?', [ts, 'idle', session.id]);
         }
       } else {
+        // For tea_out, lunch_out, etc.
         if (!session) {
+          // If no active session, create one for today
           await db.run(`INSERT INTO sessions (date, ${action}, status) VALUES (?, ?, ?)`, [today, ts, getStatusForAction(action)]);
         } else {
           await db.run(`UPDATE sessions SET ${action} = ?, status = ? WHERE id = ?`, [ts, getStatusForAction(action), session.id]);
         }
       }
 
-      // Refresh session to calculate hours
-      const currentSession = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
-      if (currentSession) {
-        const total = calculateHours(currentSession);
-        await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, currentSession.id]);
-      } else {
-        const lastSession = await db.get('SELECT * FROM sessions WHERE date = ? ORDER BY id DESC LIMIT 1', [today]);
-        if (lastSession) {
-          const total = calculateHours(lastSession);
-          await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, lastSession.id]);
-        }
+      // Refresh target session to calculate hours
+      const targetSession = session || await db.get('SELECT * FROM sessions WHERE date = ? ORDER BY id DESC LIMIT 1', [today]);
+      
+      if (targetSession) {
+        // We need the latest state to calculate hours correctly
+        const fresh = await db.get('SELECT * FROM sessions WHERE id = ?', [targetSession.id]);
+        const total = calculateHours(fresh);
+        await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, fresh.id]);
       }
 
-      const updated = await db.get('SELECT * FROM sessions WHERE date = ? AND clock_out IS NULL AND leave_type IS NULL LIMIT 1', [today]);
-      console.log(`[ACTION] Action completed. Updated session:`, updated);
-      res.json(updated || { status: 'idle' });
+      // Return the currently active session (or null if idle)
+      const finalActive = await db.get('SELECT * FROM sessions WHERE clock_out IS NULL AND leave_type IS NULL ORDER BY date DESC, clock_in DESC LIMIT 1');
+      res.json(finalActive || { status: 'idle' });
     } catch (err) {
       console.error('[ACTION ERROR]', err);
       res.status(500).json({ error: 'Internal Server Error' });
@@ -425,20 +436,35 @@ async function startServer() {
     try {
       const id = Number(req.params.id);
       const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes } = req.body;
-      await db.run(
+      
+      console.log(`[UPDATE /sessions/${id}] Action by client. Body keys:`, Object.keys(req.body));
+      
+      const result = await db.run(
         `UPDATE sessions SET 
           date = ?, clock_in = ?, tea_out = ?, tea_in = ?, 
           lunch_out = ?, lunch_in = ?, clock_out = ?, status = ?,
           leave_type = ?, is_paid = ?, leave_hours = ?, notes = ?
         WHERE id = ?`,
-        [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, isPostgres ? !!is_paid : (is_paid ? 1 : 0), leave_hours || 0, notes, id]
+        [
+          date, clock_in, tea_out, tea_in, 
+          lunch_out, lunch_in, clock_out, status, 
+          leave_type, isPostgres ? (is_paid === true || is_paid === 1 || is_paid === '1') : (is_paid ? 1 : 0), 
+          leave_hours || 0, notes, id
+        ]
       );
+      
       const updatedSession = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
-      const total = calculateHours(updatedSession);
-      await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, id]);
+      if (updatedSession) {
+        const total = calculateHours(updatedSession);
+        await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, id]);
+        console.log(`[UPDATE /sessions/${id}] Success. New total: ${total}`);
+      } else {
+        console.warn(`[UPDATE /sessions/${id}] Session not found after update!`);
+      }
+      
       res.json({ success: true });
     } catch (err) {
-      console.error('[PUT /sessions/:id] Error:', err);
+      console.error(`[PUT /sessions/${req.params.id}] Error:`, err);
       res.status(500).json({ error: 'Failed to update session' });
     }
   });
@@ -446,10 +472,12 @@ async function startServer() {
   router.delete('/sessions/:id', async (req, res) => {
     try {
       const id = Number(req.params.id);
-      await db.run('DELETE FROM sessions WHERE id = ?', [id]);
+      console.log(`[DELETE /sessions/${id}] Attempting delete`);
+      const result = await db.run('DELETE FROM sessions WHERE id = ?', [id]);
+      console.log(`[DELETE /sessions/${id}] Rows affected (lastID or rows):`, isPostgres ? result?.rowCount : result?.changes);
       res.json({ success: true });
     } catch (error) {
-      console.error('[DELETE /sessions/:id] Error:', error);
+      console.error(`[DELETE /sessions/${req.params.id}] Error:`, error);
       res.status(500).json({ error: 'Failed to delete session' });
     }
   });

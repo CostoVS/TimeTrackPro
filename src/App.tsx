@@ -194,22 +194,24 @@ export default function App() {
 
   const authenticatedFetch = async (url: string, options: RequestInit = {}) => {
     const token = localStorage.getItem('nic_token');
-    const headers = { ...options.headers, 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' };
     
-    // Offline mutation trap
-    if (!navigator.onLine && options.method && options.method !== 'GET') {
-      const offlineQueue = JSON.parse(localStorage.getItem('offlineQueue') || '[]');
-      offlineQueue.push({ url, options: { ...options, headers } });
-      localStorage.setItem('offlineQueue', JSON.stringify(offlineQueue));
-      toast.warning('Offline mode: Changes saved locally and will sync when reconnected.');
-      
-      return {
-        status: 200,
-        ok: true,
-        json: async () => ({ message: 'Queued offline', status: 'offline_queued' })
-      } as Response;
+    // Setup headers
+    const headers: Record<string, string> = { 
+      'Authorization': `Bearer ${token}`
+    };
+
+    // Only add JSON content type if it's not FormData
+    if (!(options.body instanceof FormData)) {
+      headers['Content-Type'] = 'application/json';
     }
 
+    // Merge with any custom headers
+    if (options.headers) {
+      Object.entries(options.headers).forEach(([k, v]) => {
+        headers[k] = String(v);
+      });
+    }
+    
     try {
       const res = await fetch(url, { ...options, headers });
       if (res.status === 401) {
@@ -293,8 +295,7 @@ export default function App() {
 
   const fetchCurrentSession = async () => {
     try {
-      const dateStr = getClientDate();
-      const res = await authenticatedFetch(`/api/sessions/current?date=${dateStr}`);
+      const res = await authenticatedFetch('/api/sessions/current');
       const data = await res.json();
       setCurrentSession(data);
     } catch (err) {

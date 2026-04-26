@@ -403,41 +403,53 @@ async function startServer() {
   });
 
   router.post('/sessions', async (req, res) => {
-    const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes } = req.body;
-    const result = await db.run(
-      `INSERT INTO sessions (date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes) 
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ${isPostgres ? 'RETURNING id' : ''}`,
-      [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status || 'done', leave_type, is_paid ? 1 : 0, leave_hours || 0, notes]
-    );
-    const id = isPostgres ? result.rows[0].id : result.lastID;
-    const session = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
-    const total = calculateHours(session);
-    await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, id]);
-    res.json({ success: true, id });
+    try {
+      const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes } = req.body;
+      const result = await db.run(
+        `INSERT INTO sessions (date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes) 
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ${isPostgres ? 'RETURNING id' : ''}`,
+        [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status || 'done', leave_type, isPostgres ? !!is_paid : (is_paid ? 1 : 0), leave_hours || 0, notes]
+      );
+      const id = isPostgres ? result.rows[0].id : result.lastID;
+      const session = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
+      const total = calculateHours(session);
+      await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, id]);
+      res.json({ success: true, id });
+    } catch (err) {
+      console.error('[POST /sessions] Error:', err);
+      res.status(500).json({ error: 'Failed to create session' });
+    }
   });
 
   router.put('/sessions/:id', async (req, res) => {
-    const { id } = req.params;
-    const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes } = req.body;
-    await db.run(
-      `UPDATE sessions SET 
-        date = ?, clock_in = ?, tea_out = ?, tea_in = ?, 
-        lunch_out = ?, lunch_in = ?, clock_out = ?, status = ?,
-        leave_type = ?, is_paid = ?, leave_hours = ?, notes = ?
-      WHERE id = ?`,
-      [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid ? 1 : 0, leave_hours || 0, notes, id]
-    );
-    const updatedSession = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
-    const total = calculateHours(updatedSession);
-    await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, id]);
-    res.json({ success: true });
+    try {
+      const id = Number(req.params.id);
+      const { date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, is_paid, leave_hours, notes } = req.body;
+      await db.run(
+        `UPDATE sessions SET 
+          date = ?, clock_in = ?, tea_out = ?, tea_in = ?, 
+          lunch_out = ?, lunch_in = ?, clock_out = ?, status = ?,
+          leave_type = ?, is_paid = ?, leave_hours = ?, notes = ?
+        WHERE id = ?`,
+        [date, clock_in, tea_out, tea_in, lunch_out, lunch_in, clock_out, status, leave_type, isPostgres ? !!is_paid : (is_paid ? 1 : 0), leave_hours || 0, notes, id]
+      );
+      const updatedSession = await db.get('SELECT * FROM sessions WHERE id = ?', [id]);
+      const total = calculateHours(updatedSession);
+      await db.run('UPDATE sessions SET total_hours = ? WHERE id = ?', [total, id]);
+      res.json({ success: true });
+    } catch (err) {
+      console.error('[PUT /sessions/:id] Error:', err);
+      res.status(500).json({ error: 'Failed to update session' });
+    }
   });
 
   router.delete('/sessions/:id', async (req, res) => {
     try {
-      await db.run('DELETE FROM sessions WHERE id = ?', [req.params.id]);
+      const id = Number(req.params.id);
+      await db.run('DELETE FROM sessions WHERE id = ?', [id]);
       res.json({ success: true });
     } catch (error) {
+      console.error('[DELETE /sessions/:id] Error:', error);
       res.status(500).json({ error: 'Failed to delete session' });
     }
   });

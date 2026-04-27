@@ -28,9 +28,13 @@ async function startServer() {
   // Database setup - MOVE TO TOP
   let db: any;
   const dbUrl = process.env.DATABASE_URL || "dbname=timetrack user=timetrack password=password host=localhost";
-  let isPostgres = true; // Force Postgres via the same env/fallback as python
+  
+  // If DATABASE_URL is present, we assume Postgres. If not, we might check for SQLite filename in env if desired.
+  // But user stated it SHOULD be using Postgres.
+  let isPostgres = true; 
 
   async function initializeDatabase(database: any, postgres: boolean) {
+    console.log(`Initializing ${postgres ? 'Postgres' : 'SQLite'} tables...`);
     if (postgres) {
       await database.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
@@ -126,7 +130,7 @@ async function startServer() {
 
   try {
     if (isPostgres) {
-      console.log('Attempting to connect to Postgres...');
+      console.log(`[DB] Attempting to connect to Postgres... (URL: ${dbUrl.replace(/:[^:@]+@/, ':***@')})`);
       const poolConfig: any = { connectionTimeoutMillis: 5000 };
       if (dbUrl.includes('://')) {
         poolConfig.connectionString = dbUrl;
@@ -141,18 +145,40 @@ async function startServer() {
           if (k === 'port') poolConfig.port = parseInt(v, 10);
         }
       }
+      
       const pool = new Pool(poolConfig);
+      
+      // Error handler for pool
+      pool.on('error', (err) => {
+        console.error('[DB] Postgres Pool Error:', err);
+      });
+
       db = {
         exec: async (sql: string) => await pool.query(sql),
-        all: async (sql: string, params: any[] = []) => { let c = 1; return (await pool.query(sql.replace(/\?/g, () => `$${c++}`), params)).rows; },
-        get: async (sql: string, params: any[] = []) => { let c = 1; return (await pool.query(sql.replace(/\?/g, () => `$${c++}`), params)).rows[0]; },
-        run: async (sql: string, params: any[] = []) => { let c = 1; return await pool.query(sql.replace(/\?/g, () => `$${c++}`), params); },
+        all: async (sql: string, params: any[] = []) => { 
+          let c = 1; 
+          const querySql = sql.replace(/\?/g, () => `$${c++}`);
+          const res = await pool.query(querySql, params);
+          return res.rows; 
+        },
+        get: async (sql: string, params: any[] = []) => { 
+          let c = 1; 
+          const querySql = sql.replace(/\?/g, () => `$${c++}`);
+          const res = await pool.query(querySql, params);
+          return res.rows[0]; 
+        },
+        run: async (sql: string, params: any[] = []) => { 
+          let c = 1; 
+          const querySql = sql.replace(/\?/g, () => `$${c++}`);
+          return await pool.query(querySql, params); 
+        },
       };
+
       // Test connection
       await pool.query('SELECT 1');
-      console.log('Postgres connected successfully');
+      console.log('[DB] Postgres connection verified');
     } else {
-      console.log('Using SQLite database');
+      console.log('[DB] Using SQLite fallback');
       db = await open({
         filename: './database.sqlite',
         driver: sqlite3.Database
@@ -160,18 +186,29 @@ async function startServer() {
     }
 
     await initializeDatabase(db, isPostgres);
-    console.log('Database tables initialized');
+    console.log('[DB] Initialization complete');
   } catch (err) {
-    console.error('Database initialization failed:', err);
-    // Fallback to SQLite if Postgres fails to prevent boot hang
+    console.error('[DB] FATAL ERROR during database initialization:', err);
     if (isPostgres) {
-      console.log('Falling back to SQLite due to Postgres error');
-      isPostgres = false;
-      db = await open({
-        filename: './database.sqlite',
-        driver: sqlite3.Database
-      });
-      await initializeDatabase(db, false);
+      console.error('[DB] Postgres failed. Check your DATABASE_URL and database availability.');
+      // If Postgres fails, we crash or fallback. Given user's request, crashing is better than using wrong DB.
+      // But let's fallback to SQLite ONLY IF NO DATABASE_URL was provided.
+      if (!process.env.DATABASE_URL) {
+        console.warn('[DB] Falling back to SQLite as no DATABASE_URL was explicitly set.');
+        isPostgres = false;
+        db = await open({
+          filename: './database.sqlite',
+          driver: sqlite3.Database
+        });
+        await initializeDatabase(db, false);
+      } else {
+        console.error('[DB] Postgres connection required but failed. Process may not function correctly.');
+        // We could throw here, but let's see if we can just log it loudly.
+        // Actually, let's throw to stop the server if Postgres is required.
+        throw err;
+      }
+    } else {
+      throw err;
     }
   }
 
